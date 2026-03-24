@@ -1,0 +1,14 @@
+{
+  "name": "clutch-accessibility",
+  "version": "1.0.0",
+  "description": "Accessibility service module for OpenClutch",
+  "main": "index",
+  "files": [
+    "android",
+    "index.js",
+    "index.d.ts"
+  ],
+  "dependencies": {
+    "expo-modules-core": "*"
+  }
+}

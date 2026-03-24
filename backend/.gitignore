@@ -1,0 +1,6 @@
+.zerodha-token.json
+node_modules/
+.env
+*.log
+logs/
+uploads/
