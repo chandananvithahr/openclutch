@@ -5,6 +5,7 @@ const axios = require('axios');
 const FormData = require('form-data');
 const fs = require('fs');
 const supabase = require('../lib/supabase');
+const logger = require('../lib/logger');
 
 // Use production key if available, otherwise sandbox
 function getCasApiKey() {
@@ -33,12 +34,12 @@ async function loadCasFromDB() {
     if (meta.path && fs.existsSync(meta.path)) {
       uploadedCasPath = meta.path;
       uploadedCasName = meta.filename;
-      console.log('CAS file path loaded from Supabase:', uploadedCasName);
+      logger.info('CAS file path loaded from Supabase:', uploadedCasName);
     }
   }
 }
 
-loadCasFromDB().catch(console.error);
+loadCasFromDB().catch(err => logger.error('Failed to load CAS from DB', { err: err.message }));
 
 // POST /api/cas/upload
 // Mobile sends PDF file, we store path and persist to Supabase
@@ -116,7 +117,7 @@ async function parseCasAPI(password) {
   if (password) form.append('password', password);
 
   const isSandbox = apiKey.startsWith('sandbox');
-  console.log(`[CAS] Using ${isSandbox ? 'sandbox' : 'production'} API key`);
+  logger.info(`[CAS] Using ${isSandbox ? 'sandbox' : 'production'} API key`);
 
   const response = await axios.post('https://api.casparser.in/v4/smart/parse', form, {
     headers: {
@@ -201,7 +202,7 @@ async function parseCas(password) {
   // Try CASParserHQ API first
   try {
     const apiData = await parseCasAPI(password);
-    console.log('[CAS] Parsed via CASParserHQ API');
+    logger.info('[CAS] Parsed via CASParserHQ API');
     return normalizeResponse(apiData);
   } catch (apiErr) {
     const status = apiErr.response?.status;
@@ -216,12 +217,12 @@ async function parseCas(password) {
     }
 
     // Don't fallback for auth issues unless we also have local parser
-    console.warn(`[CAS] API failed (${apiErr.message}), trying local fallback...`);
+    logger.warn(`[CAS] API failed (${apiErr.message}), trying local fallback...`);
 
     // Try local Python parser as fallback
     try {
       const localData = await parseCasLocal(password);
-      console.log('[CAS] Parsed via local casparser (fallback)');
+      logger.info('[CAS] Parsed via local casparser (fallback)');
       return normalizeResponse(localData);
     } catch (localErr) {
       // Both failed — return the most useful error

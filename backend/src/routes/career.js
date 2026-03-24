@@ -8,6 +8,8 @@ const fs = require('fs');
 const supabase = require('../lib/supabase');
 const { chat } = require('../lib/ai');
 const gmail = require('./gmail');
+const logger = require('../lib/logger');
+const config = require('../lib/config');
 
 const upload = multer({ dest: 'uploads/' });
 
@@ -72,7 +74,7 @@ router.get('/applications', async (req, res) => {
     .select('*')
     .eq('user_id', userId)
     .order('applied_date', { ascending: false })
-    .limit(50);
+    .limit(config.SPENDING.APPLICATIONS_LIMIT);
 
   res.json({ applications: data || [] });
 });
@@ -106,7 +108,7 @@ If data is unclear, make reasonable inferences. Never return null for required f
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) return JSON.parse(jsonMatch[0]);
   } catch (err) {
-    console.error('Resume parse AI error:', err.message);
+    logger.error('Resume parse AI error:', err.message);
   }
 
   return {
@@ -350,5 +352,4 @@ module.exports.searchJobEmails = searchJobEmails;
 module.exports.getInterviewPrep = getInterviewPrep;
 module.exports.getSalaryNegotiation = getSalaryNegotiation;
 module.exports.scoreJobFit = scoreJobFit;
-module.exports.trackJobApplication = trackJobApplication;
 module.exports.trackJobApplication = trackJobApplication;

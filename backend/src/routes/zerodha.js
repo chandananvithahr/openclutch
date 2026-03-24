@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { KiteConnect } = require('kiteconnect');
 const supabase = require('../lib/supabase');
+const logger = require('../lib/logger');
 
 const kite = new KiteConnect({
   api_key: process.env.ZERODHA_API_KEY,
@@ -21,11 +22,11 @@ async function loadTokenFromDB() {
   if (data?.access_token) {
     accessToken = data.access_token;
     kite.setAccessToken(accessToken);
-    console.log('Zerodha token loaded from Supabase');
+    logger.info('Zerodha token loaded from Supabase');
   }
 }
 
-loadTokenFromDB().catch(console.error);
+loadTokenFromDB().catch(err => logger.error('Zerodha token load failed', { err: err.message }));
 
 // Step 1: Generate Zerodha login URL
 // GET /api/zerodha/login — returns JSON for app, redirects for browser
@@ -73,7 +74,7 @@ router.get('/callback', async (req, res) => {
       </body></html>
     `);
   } catch (err) {
-    console.error('Zerodha auth error:', err.message);
+    logger.error('Zerodha auth error:', err.message);
     res.status(500).send(`Auth failed: ${err.message}`);
   }
 });
@@ -124,7 +125,7 @@ router.get('/portfolio', async (req, res) => {
       brokers_connected: ['Zerodha'],
     });
   } catch (err) {
-    console.error('Portfolio fetch error:', err.message);
+    logger.error('Portfolio fetch error:', err.message);
     // Token expired — clear so status returns false and user is prompted to reconnect
     if (err.error_type === 'TokenException' || err.message?.includes('token')) {
       accessToken = null;

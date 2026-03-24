@@ -6,6 +6,7 @@ const router = express.Router();
 const supabase = require('../lib/supabase');
 const { chat } = require('../lib/ai');
 const sms = require('./sms');
+const logger = require('../lib/logger');
 
 // POST /api/journal/entry — save or update today's journal
 router.post('/entry', async (req, res) => {
@@ -42,13 +43,13 @@ router.post('/entry', async (req, res) => {
       .single();
 
     if (error) {
-      console.error('Journal save error:', error.message);
+      logger.error('Journal save error:', error.message);
       return res.status(500).json({ error: 'Failed to save journal entry' });
     }
 
     res.json({ success: true, entry: data });
   } catch (err) {
-    console.error('Journal error:', err.message);
+    logger.error('Journal error:', err.message);
     res.status(500).json({ error: 'Something went wrong saving your journal' });
   }
 });
@@ -136,7 +137,7 @@ Respond ONLY with valid JSON: {"mood": "...", "energy_level": N, "tags": ["..."]
       return JSON.parse(jsonMatch[0]);
     }
   } catch (err) {
-    console.error('Mood analysis error:', err.message);
+    logger.error('Mood analysis error:', err.message);
   }
 
   return { mood: 'neutral', energy_level: 3, tags: [] };

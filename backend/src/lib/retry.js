@@ -35,7 +35,10 @@ async function withRetry(fn, opts = {}) {
       if (shouldRetry && !shouldRetry(err)) throw err;
       if (attempt === maxRetries) break;
       const delay = backoffDelay(attempt, opts);
-      console.warn(`Retry ${attempt + 1}/${maxRetries} after ${delay}ms — ${err.message}`);
+      // Avoid circular dep: retry.js is used by broker-client.js which loads before logger in some paths
+      if (typeof process !== 'undefined') {
+        process.stderr.write(`[RETRY] ${attempt + 1}/${maxRetries} after ${delay}ms — ${err.message}\n`);
+      }
       await sleep(delay);
     }
   }

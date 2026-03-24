@@ -71,7 +71,7 @@ async function* chatStream({ messages, tone = 'pro', connectedServices = [] }) {
   const safeMessages = messages.slice(-config.MAX_MESSAGES_TO_LLM);
 
   const stream = await openai.chat.completions.create({
-    model:    MODEL,
+    model:    config.MODEL,
     messages: [{ role: 'system', content: systemPrompt }, ...safeMessages],
     stream:   true,
   });

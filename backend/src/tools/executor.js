@@ -1,7 +1,5 @@
 // Tool executor — when OpenAI calls a tool, this runs the actual function
 
-const zerodha      = require('../routes/zerodha');
-const angelone     = require('../routes/angelone');
 const gmail        = require('../routes/gmail');
 const cas          = require('../routes/cas');
 const sms          = require('../routes/sms');
@@ -10,9 +8,11 @@ const journal      = require('../routes/journal');
 const career       = require('../routes/career');
 const health       = require('../routes/health');
 const brokers      = require('../brokers');
+const repos        = require('../repositories');
 const yahooFinance = require('yahoo-finance2').default;
 const { withCache, TTL } = require('../lib/cache');
 const logger       = require('../lib/logger');
+const config       = require('../lib/config');
 
 async function executeTool(toolName, toolArgs, userContext) {
   switch (toolName) {
@@ -79,15 +79,9 @@ async function executeTool(toolName, toolArgs, userContext) {
   }
 }
 
-// --- Portfolio --- now lives in brokers/index.js (adapter pattern)
-// Kept here as a thin wrapper so getPortfolioChart can call it
-async function getPortfolio() {
-  return brokers.getPortfolio();
-}
-
 // --- Portfolio 1-Year Chart ---
 async function getPortfolioChart(userContext) {
-  const portfolio = await getPortfolio();
+  const portfolio = await brokers.getPortfolio();
   if (portfolio.error) return portfolio;
 
   const holdings = portfolio.holdings;
@@ -240,30 +234,25 @@ async function getEmails(count, userContext) {
 
 // --- Weekly Spending Review ---
 async function getWeeklyReview(userContext) {
-  const supabase = require('../lib/supabase');
   const today = new Date();
   const weekAgo = new Date(today);
   weekAgo.setDate(weekAgo.getDate() - 7);
   const twoWeeksAgo = new Date(today);
   twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
 
-  // This week's transactions
-  const { data: thisWeek } = await supabase
-    .from('sms_transactions')
-    .select('amount, merchant, category, txn_date')
-    .eq('user_id', userContext.userId)
-    .eq('type', 'debit')
-    .gte('txn_date', weekAgo.toISOString().slice(0, 10))
-    .lte('txn_date', today.toISOString().slice(0, 10));
+  const todayStr = today.toISOString().slice(0, 10);
+  const weekAgoStr = weekAgo.toISOString().slice(0, 10);
+  const twoWeeksAgoStr = twoWeeksAgo.toISOString().slice(0, 10);
+
+  // This week's transactions (via repository)
+  const { data: thisWeek } = await repos.transactions.querySpending(userContext.userId, {
+    type: 'debit', startDate: weekAgoStr, endDate: todayStr,
+  });
 
   // Last week's transactions (for comparison)
-  const { data: lastWeek } = await supabase
-    .from('sms_transactions')
-    .select('amount, merchant, category, txn_date')
-    .eq('user_id', userContext.userId)
-    .eq('type', 'debit')
-    .gte('txn_date', twoWeeksAgo.toISOString().slice(0, 10))
-    .lt('txn_date', weekAgo.toISOString().slice(0, 10));
+  const { data: lastWeek } = await repos.transactions.querySpending(userContext.userId, {
+    type: 'debit', startDate: twoWeeksAgoStr, endDate: weekAgoStr,
+  });
 
   const thisWeekData = thisWeek || [];
   const lastWeekData = lastWeek || [];
@@ -315,31 +304,29 @@ async function getWeeklyReview(userContext) {
 
 // --- Salary Detection ---
 async function detectSalary(month, userContext) {
-  const supabase = require('../lib/supabase');
   const targetMonth = month || new Date().toISOString().slice(0, 7);
   const [yr, mo] = targetMonth.split('-').map(Number);
   const nextMo = mo === 12 ? `${yr + 1}-01-01` : `${yr}-${String(mo + 1).padStart(2, '0')}-01`;
 
-  // Look for credit transactions (salary patterns)
-  const { data } = await supabase
-    .from('sms_transactions')
-    .select('amount, merchant, bank, txn_date, type')
-    .eq('user_id', userContext.userId)
-    .gte('txn_date', `${targetMonth}-01`)
-    .lt('txn_date', nextMo)
-    .order('amount', { ascending: false });
+  // Load all transactions for the month (credits + debits) via repository
+  // querySpending defaults to 'debit', so we need both types — use two calls
+  const { data: debits } = await repos.transactions.querySpending(userContext.userId, {
+    type: 'debit', startDate: `${targetMonth}-01`, endDate: nextMo,
+  });
+  const { data: credits } = await repos.transactions.querySpending(userContext.userId, {
+    type: 'credit', startDate: `${targetMonth}-01`, endDate: nextMo,
+  });
 
-  const allTxns = data || [];
+  const allTxns = [...(credits || []), ...(debits || [])];
 
   // Find likely salary: credit > ₹10,000 OR large round amounts
-  const credits = allTxns.filter(t => t.type === 'credit' && t.amount >= 10000);
+  const salaryCredits = (credits || []).filter(t => t.amount >= 10000);
 
-  // Also check debits for total spending
-  const debits = allTxns.filter(t => t.type === 'debit');
-  const totalSpent = debits.reduce((s, t) => s + t.amount, 0);
+  // Total spending from debits
+  const totalSpent = (debits || []).reduce((s, t) => s + t.amount, 0);
 
-  if (credits.length > 0) {
-    const salary = credits[0]; // Largest credit is likely salary
+  if (salaryCredits.length > 0) {
+    const salary = salaryCredits.sort((a, b) => b.amount - a.amount)[0]; // Largest credit is likely salary
     const daysInMonth = new Date(yr, mo, 0).getDate();
     const dayOfMonth = new Date(salary.txn_date).getDate();
     const remainingDays = daysInMonth - new Date().getDate();
@@ -372,7 +359,7 @@ async function getNetWorth(userContext) {
   let estimatedBankBalance = 0;
 
   // Stock portfolio
-  const portfolio = await getPortfolio();
+  const portfolio = await brokers.getPortfolio();
   if (!portfolio.error) {
     portfolioValue = portfolio.total_value;
   }

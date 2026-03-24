@@ -4,7 +4,9 @@ const axios = require('axios');
 const { chat } = require('../lib/ai');
 const tools = require('../tools/index');
 const { executeTool } = require('../tools/executor');
-const supabase = require('../lib/supabase');
+const repos = require('../repositories');
+const logger = require('../lib/logger');
+const config = require('../lib/config');
 
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
@@ -18,7 +20,7 @@ router.get('/webhook', (req, res) => {
   const challenge = req.query['hub.challenge'];
 
   if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-    console.log('WhatsApp webhook verified');
+    logger.info('WhatsApp webhook verified');
     return res.status(200).send(challenge);
   }
 
@@ -42,13 +44,8 @@ router.post('/webhook', async (req, res) => {
     const userText = message.text.body;
     const userId = `wa_${from}`;       // unique ID per WhatsApp user
 
-    // Load this user's recent chat history from Supabase (last 10 messages)
-    const { data: history } = await supabase
-      .from('messages')
-      .select('role, content')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: true })
-      .limit(10);
+    // Load this user's recent chat history (last 10 messages)
+    const { data: history } = await repos.messages.loadHistory(userId, 10);
 
     const messages = [
       ...(history || []),
@@ -82,17 +79,14 @@ router.post('/webhook', async (req, res) => {
 
     const reply = aiMessage.content;
 
-    // Save to Supabase
-    await supabase.from('messages').insert([
-      { user_id: userId, role: 'user', content: userText, tone: 'bhai' },
-      { user_id: userId, role: 'assistant', content: reply, tone: 'bhai' },
-    ]);
+    // Save to DB via repository
+    await repos.messages.save(userId, userText, reply, 'bhai');
 
     // Send reply back via WhatsApp
     await sendWhatsAppMessage(from, reply);
 
   } catch (err) {
-    console.error('WhatsApp webhook error:', err.message);
+    logger.error('WhatsApp webhook error:', err.message);
   }
 });
 

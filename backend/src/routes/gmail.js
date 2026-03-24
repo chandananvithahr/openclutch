@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { google } = require('googleapis');
 const supabase = require('../lib/supabase');
+const logger = require('../lib/logger');
 
 const REDIRECT_URI = process.env.GMAIL_REDIRECT_URI || 'http://127.0.0.1:3000/api/gmail/callback';
 
@@ -56,11 +57,11 @@ async function loadTokensFromDB() {
 
   if (data?.access_token) {
     gmailTokens = JSON.parse(data.access_token);
-    console.log('Gmail tokens loaded from Supabase');
+    logger.info('Gmail tokens loaded from Supabase');
   }
 }
 
-loadTokensFromDB().catch(console.error);
+loadTokensFromDB().catch(err => logger.error('Gmail token load failed', { err: err.message }));
 
 // GET /api/gmail/login — returns JSON for app, redirects for browser
 router.get('/login', (req, res) => {
@@ -106,7 +107,7 @@ router.get('/callback', async (req, res) => {
       </body></html>
     `);
   } catch (err) {
-    console.error('Gmail OAuth error:', err.message);
+    logger.error('Gmail OAuth error:', err.message);
     res.status(500).send(`Auth failed: ${err.message}`);
   }
 });

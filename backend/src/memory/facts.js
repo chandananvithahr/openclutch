@@ -14,7 +14,7 @@ const OpenAI  = require('openai');
 const repos   = require('../repositories');
 const config  = require('../lib/config');
 const logger  = require('../lib/logger');
-const { supabase } = require('../lib/supabase');
+const supabase = require('../lib/supabase');
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 

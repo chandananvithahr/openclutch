@@ -32,11 +32,7 @@ async function withCache(key, ttlMs, fn) {
   return fresh;
 }
 
-const TTL = {
-  PORTFOLIO: 5 * 60 * 1000,     // 5 min — broker data
-  STOCK_PRICE: 2 * 60 * 1000,   // 2 min — live prices
-  FINANCIALS: 24 * 60 * 60 * 1000, // 24 hr — screener data
-  SPENDING: 10 * 60 * 1000,     // 10 min — SMS/email transactions
-};
+// TTL values live in config.js — import from there
+const { TTL } = require('./config');
 
 module.exports = { get, set, del, withCache, TTL };

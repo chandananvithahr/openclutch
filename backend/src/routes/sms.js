@@ -6,7 +6,10 @@
 const express = require('express');
 const router = express.Router();
 const supabase = require('../lib/supabase');
+const repos = require('../repositories');
 const { categorize } = require('../services/categorizer');
+const logger = require('../lib/logger');
+const config = require('../lib/config');
 
 // POST /api/sms/transactions
 // Mobile sends batch of parsed bank SMS transactions
@@ -38,12 +41,7 @@ router.get('/spending', async (req, res) => {
 // GET /api/sms/recent — shows last 20 stored transactions (for debugging)
 router.get('/recent', async (req, res) => {
   const { userId = 'default_user' } = req.query;
-  const { data, error } = await supabase
-    .from('sms_transactions')
-    .select('amount, merchant, category, bank, txn_date, source')
-    .eq('user_id', userId)
-    .order('txn_date', { ascending: false })
-    .limit(20);
+  const { data, error } = await repos.transactions.loadRecent(userId, config.SPENDING.RECENT_TXNS_LIMIT);
 
   if (error) return res.status(500).json({ error: error.message });
   res.json({ transactions: data, count: data.length });
@@ -52,12 +50,9 @@ router.get('/recent', async (req, res) => {
 // GET /api/sms/status
 router.get('/status', async (req, res) => {
   const { userId = 'default_user' } = req.query;
-  const { count, error } = await supabase
-    .from('sms_transactions')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId);
+  const { count, error } = await repos.transactions.count(userId);
 
-  res.json({ connected: !error && (count || 0) > 0, transaction_count: count || 0 });
+  res.json({ connected: !error && count > 0, transaction_count: count });
 });
 
 // --- Core dedup logic ---
@@ -86,27 +81,19 @@ async function upsertTransactions(transactions, userId, source) {
     txn_hash: t.hash || buildTxnHash(t.amount, t.date, t.merchant || 'unknown'),
   }));
 
-  // Insert new transactions — ignore true duplicates (same hash = same transaction)
-  const { error } = await supabase
-    .from('sms_transactions')
-    .upsert(rows, { onConflict: 'user_id,txn_hash', ignoreDuplicates: true });
+  // Insert new transactions via repository (dedup by user_id + txn_hash)
+  const { error } = await repos.transactions.upsertBatch(rows);
 
   if (error) {
-    console.error('Transaction insert error:', error.message);
+    logger.error('Transaction insert error', { err: error.message });
     return { error: error.message };
   }
 
-  // Mark cross-verified transactions — single batch update instead of N+1 loop
-  // supabase-js pattern: .in() for batch filtering
+  // Mark cross-verified transactions via repository
   const crossSource = source === 'email' ? 'sms' : 'email';
   const hashes = rows.map(r => r.txn_hash);
   if (hashes.length > 0) {
-    await supabase
-      .from('sms_transactions')
-      .update({ source: 'both' })
-      .eq('user_id', userId)
-      .eq('source', crossSource)
-      .in('txn_hash', hashes);
+    await repos.transactions.markCrossVerified(userId, hashes, crossSource);
   }
 
   return { success: true, saved: rows.length };

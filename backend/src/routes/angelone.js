@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const SmartAPI = require('smartapi-javascript');
 const supabase = require('../lib/supabase');
+const logger = require('../lib/logger');
 
 // In-memory token (loaded from Supabase on startup)
 let jwtToken = null;
@@ -24,11 +25,11 @@ async function loadTokenFromDB() {
     jwtToken = data.access_token;
     smartApi = createSmartApi();
     smartApi.setAccessToken(jwtToken);
-    console.log('Angel One token loaded from Supabase');
+    logger.info('Angel One token loaded from Supabase');
   }
 }
 
-loadTokenFromDB().catch(console.error);
+loadTokenFromDB().catch(err => logger.error('Angel One token load failed', { err: err.message }));
 
 // POST /api/angelone/connect
 // Body: { clientId, password, totp }
@@ -63,7 +64,7 @@ router.post('/connect', async (req, res) => {
 
     res.json({ success: true, message: 'Angel One connected!' });
   } catch (err) {
-    console.error('Angel One connect error:', err.message);
+    logger.error('Angel One connect error:', err.message);
     res.status(500).json({ error: `Connection failed: ${err.message}` });
   }
 });
@@ -114,7 +115,7 @@ router.get('/portfolio', async (req, res) => {
       brokers_connected: ['Angel One'],
     });
   } catch (err) {
-    console.error('Angel One portfolio error:', err.message);
+    logger.error('Angel One portfolio error:', err.message);
     // Token expired — clear so status returns false and user is prompted to reconnect
     if (err.message?.includes('Invalid Token') || err.message?.includes('Unauthorized')) {
       jwtToken = null;
