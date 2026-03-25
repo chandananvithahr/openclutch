@@ -15,16 +15,17 @@ server.js          ← HTTP entry, CORS, graceful shutdown
   │   ├─ chat.js   ← Core AI loop: memory → OpenAI → tool dispatch → response
   │   ├─ zerodha.js / angelone.js  ← Broker OAuth + token storage
   │   ├─ gmail.js  ← Google OAuth + email fetch
+  │   ├─ calendar.js ← Google Calendar OAuth + schedule/free slots (Kaal agent)
   │   ├─ sms.js    ← Bank SMS + email transaction sync
   │   ├─ journal.js / career.js / health.js / cas.js
   │   └─ whatsapp.js (deferred)
   │
   ├─ tools/
-  │   ├─ index.js     ← OpenAI tool schema definitions (20+ tools)
+  │   ├─ index.js     ← OpenAI tool schema definitions (27 tools)
   │   └─ executor.js  ← Routes tool calls to real functions + cache layer
   │
   ├─ brokers/
-  │   └─ index.js  ← Adapter pattern: Zerodha + Angel One → unified getPortfolio()
+  │   └─ index.js  ← Adapter pattern: 6 brokers → unified getPortfolio()
   │
   ├─ memory/
   │   ├─ window.js ← Tier 1+2: sliding window (8 verbatim) + LLM summarization
@@ -64,6 +65,15 @@ server.js          ← HTTP entry, CORS, graceful shutdown
 **Problem:** 60-line `getPortfolio()` in executor.js duplicated Zerodha + Angel One merging logic.
 **Solution:** `brokers/index.js` defines `adapters[]` with uniform `isConnected()` + `getHoldings()` interface. `normalizeHolding()` produces a consistent shape.
 **Adding a new broker:** Add one entry to `adapters[]`. No other changes needed.
+**Planned brokers (6 total, ~90% market coverage):**
+| Broker | API | Auth | Status |
+|--------|-----|------|--------|
+| Zerodha | KiteConnect | OAuth2 | ✅ Built |
+| Angel One | SmartAPI | TOTP | ✅ Built |
+| Upstox | Upstox API v2 | OAuth2 | ⬜ Next |
+| Fyers | Fyers API v3 | OAuth2 | ⬜ Planned |
+| Dhan | DhanHQ | Access Token | ⬜ Planned |
+| 5paisa | 5paisa API | OAuth2+TOTP | ⬜ Planned |
 
 ### 3. Centralized Config (dns.toys)
 **Problem:** Magic numbers in 5 different files (`KEEP_VERBATIM=8` in window.js, `MAX_REQUESTS=20` in rateLimit.js, TTLs in cache.js, etc.)
@@ -139,6 +149,28 @@ Required for Railway/Heroku zero-downtime deploys.
 
 ---
 
+### 9. Cleo-Style Onboarding (NEW)
+**Inspiration:** Cleo AI — "Big Sister Energy", one-question-per-screen, instant micro-insights.
+**Pattern:** Adaptive branching (student vs working), every answer triggers an AI reaction, profile data feeds all agents.
+
+```
+mobile/screens/OnboardingFlow.js    ← Replaces old OnboardingScreen.js
+mobile/components/OnboardingCard.js ← Reusable one-question card component
+backend/src/routes/onboarding.js    ← POST /api/onboarding/profile (store profile)
+backend/sql/user_profiles.sql       ← user_profiles table
+```
+
+**Flow:** 10 screens max (most users see 7-8). Branching at Screen 4 (student/working).
+**Design:** Dark mode default, warm cocoa palette (#2D1B14 bg, #FFE36D accent), 24-28px headlines, generous whitespace.
+**Key principle:** Every answer triggers an instant micro-insight — user feels value immediately.
+
+Profile data stored in `user_profiles` table, accessed via `repositories/index.js` → `userProfiles` repo.
+AI system prompt injects profile data so every response is personalized from day one.
+
+See `docs/VISION.md` → "Onboarding — Cleo AI-Inspired Experience" for full screen-by-screen spec.
+
+---
+
 ## Database Tables
 
 | Table | Purpose | Status |
@@ -147,6 +179,7 @@ Required for Railway/Heroku zero-downtime deploys.
 | `user_facts` | Tier 3 memory | ✅ |
 | `connected_apps` | OAuth tokens | ✅ |
 | `sms_transactions` | Bank transactions | ✅ |
+| `user_profiles` | Onboarding profile data (name, age, salary, etc.) | ⬜ Run SQL |
 | `journal_entries` | Daily journal + mood | ⬜ Run SQL |
 | `career_profiles` | Parsed resume | ⬜ Run SQL |
 | `job_applications` | Application tracker | ⬜ Run SQL |
@@ -168,6 +201,16 @@ GOOGLE_CLIENT_ID=        # Gmail OAuth
 GOOGLE_CLIENT_SECRET=    # Gmail OAuth
 GMAIL_REDIRECT_URI=      # Gmail OAuth callback
 ANGEL_ONE_API_KEY=       # Broker
+UPSTOX_API_KEY=          # Broker
+UPSTOX_API_SECRET=       # Broker
+FYERS_APP_ID=            # Broker
+FYERS_SECRET_ID=         # Broker
+DHAN_CLIENT_ID=          # Broker
+DHAN_ACCESS_TOKEN=       # Broker
+FIVEPAISA_APP_NAME=      # Broker
+FIVEPAISA_APP_SOURCE=    # Broker
+FIVEPAISA_USER_KEY=      # Broker
+FIVEPAISA_ENCRYPTION_KEY= # Broker
 CASPARSER_API_KEY=       # MF portfolio
 PORT=3000                # Default 3000
 LOG_LEVEL=info           # error|warn|info|debug

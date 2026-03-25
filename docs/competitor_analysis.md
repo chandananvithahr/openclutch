@@ -1,6 +1,7 @@
 # Clutch — Competitor Analysis
 
-> Last updated: 2026-03-21
+> Last updated: 2026-03-25
+> See also: `cleo_design_reference.md` (UI/UX deep dive), `competitor_deep_dive.md` (feature analysis)
 
 ---
 
@@ -28,19 +29,21 @@ DOMAIN                     │                     DOMAINS
 
 ## Direct Competitors
 
-### 1. Cleo — Closest Global Competitor
-- **What:** AI money assistant — connects bank + cards, budgets, cash advances
-- **Funding:** $175M | Valuation: $500M
-- **Users:** 7M+ (US + UK)
-- **Pricing:** Free basic | $2.99–$19.99/month premium
-- **Tone:** Playful, "roast mode", Gen Z focused
-- **Strong at:** Conversational finance AI, subscription detection, personality
+### 1. Cleo — Closest Global Competitor (Updated March 2026)
+- **What:** AI money coach — connects bank + cards, budgets, cash advances, voice conversations
+- **Funding:** $175M | Valuation: ~$500M
+- **Users:** 8M+ (1M paid) | **ARR: $150-250M**
+- **Pricing:** Free | Plus $5.99/mo | Builder $14.99/mo
+- **Cleo 3.0 (July 2025):** Voice conversations, dynamic long-term memory, OpenAI o3 reasoning, agentic architecture (4 pillars: reasoning, memory, tools, multimodal)
+- **Tone:** "Big Sister Energy" — Roast Mode (savage), Hype Mode (celebratory)
+- **Strong at:** Personality-driven AI (300K roasts/year, viral screenshots), best chat UX in fintech
 - **Missing:**
-  - Finance ONLY — no trading, health, career, family
-  - US/UK only — zero India presence
+  - Finance ONLY — zero investment/portfolio features
+  - US/UK only — **NO India plans** (eyeing UK return first)
+  - No cross-domain intelligence (health, career, mood)
   - No Indian broker integrations
-  - No RAG memory
-- **Threat level:** LOW — different market, single domain
+- **Threat level:** LOW — not coming to India. But #1 design reference for Clutch.
+- **Design reference:** See `docs/cleo_design_reference.md` for full UI/UX breakdown
 
 ---
 
@@ -59,13 +62,15 @@ DOMAIN                     │                     DOMAINS
 
 ---
 
-### 3. Fi Money — No Longer a Threat
+### 3. Fi Money — CONFIRMED DEAD (March 2026)
 - **What:** Indian neobank with AI insights
 - **Funding:** $169M | Temasek, Ribbit Capital
-- **Status:** ⚠️ WINDING DOWN consumer banking as of March 2026
-- **Why they failed:** Couldn't compete in Indian banking. Pivoting to B2B AI.
-- **Lesson for Clutch:** Consumer banking is hard. Don't become a bank. Be an AI layer on top.
-- **Threat level:** NONE — exiting consumer market
+- **Status:** ⚠️ BANKING SERVICES SHUT DOWN — 3.5M users affected
+- **Timeline:** Fi-Points ended March 20, 2026. US Stocks migrating to INDmoney (April 10). Workforce under 100.
+- **MCP Legacy:** Launched India's first consumer finance MCP server (July 2025) — exported financial data to any AI. Technically brilliant, commercially dead.
+- **US Stock users:** Auto-migrating to INDmoney — 3.5M displaced users looking for a new home
+- **Lesson:** Don't become a bank. Don't hold money. Be the AI layer on top.
+- **Threat level:** NONE — dead. But 3.5M orphaned users = Clutch's opportunity.
 
 ---
 
@@ -133,7 +138,7 @@ DOMAIN                     │                     DOMAINS
 | Google | "Google Life Assistant" with all your data | 12–24 months | Move fast, build loyalty, own the Indian market first |
 | Meta | Personal AI (post-Limitless acquisition) | 12–18 months | They're US-focused, India is your moat |
 | Zerodha | Zerodha AI assistant | 6–12 months | Only shows Zerodha data. You show everything. |
-| Groww | Groww GR1 (beta now) | 3–6 months | Only shows Groww data. You show everything. |
+| Groww | **Groww GR1 (LIVE beta, Feb 28 2026)** | NOW — broader rollout 1-2 quarters | Investment-only. No spending/health/career. Single domain = limited. |
 
 **The broker threat is real but limited.** Each broker will build AI for their own data. None will show competitor data. Clutch always wins on completeness.
 

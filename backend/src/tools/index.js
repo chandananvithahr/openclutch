@@ -344,6 +344,45 @@ When user mentions a date, ALWAYS use after:/before: operators. When user says "
       },
     },
   },
+  // --- Kaal Agent: Time/Productivity ---
+  {
+    type: 'function',
+    function: {
+      name: 'get_today_schedule',
+      description: 'Get today\'s calendar events, meeting count, total meeting hours, and free hours. Use when user asks "what\'s my schedule", "meetings today", "am I busy today", "what do I have today".',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_upcoming_events',
+      description: 'Get upcoming calendar events for the next N days, grouped by day. Use when user asks "what\'s coming up", "this week\'s schedule", "any meetings this week", "next few days".',
+      parameters: {
+        type: 'object',
+        properties: {
+          days: { type: 'number', description: 'Number of days to look ahead (default 7)' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_free_slots',
+      description: 'Find free time slots today between meetings (9am-6pm, minimum 30-min blocks). Use when user asks "when am I free", "do I have time for", "can I fit a meeting", "free slots today".',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
   // --- Arogya Agent: Health ---
   {
     type: 'function',

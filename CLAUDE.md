@@ -1,5 +1,36 @@
 # OpenClutch — Project Instructions
 
+## Current State (update this after every session)
+
+**Last updated:** 2026-03-25 | **Last commit:** `f4aec96` — 8-phase codebase cleanup
+
+### What's Built ✅
+- Backend: Express server, all routes (chat, zerodha, angelone, gmail, calendar, sms, cas, journal, career, health, workflows, onboarding stub)
+- 3-tier memory system (sliding window + LLM summary + GPT facts)
+- 27 AI tools defined + executor routing
+- Workflow engine (DeerFlow2 pattern): emailSync, portfolioSync, healthSync, weeklyReview, smsIngestion
+- Broker adapters: Zerodha ✅, Angel One ✅
+- Mobile: ChatScreen, useChat hook, smsParser, healthConnect (Android), healthKit (iOS), unified health.js
+- Supabase tables: messages, connected_apps, user_facts, sms_transactions ✅
+
+### What's NOT Built Yet ❌
+- Supabase tables: `user_profiles`, `notifications`, `journal_entries`, `career_profiles`, `health_data` — SQL files exist, NOT run yet
+- Onboarding: `OnboardingFlow.js`, `OnboardingCard.js`, `onboarding.js` route — designed, NOT coded
+- Brokers: Upstox (P0), Fyers (P1), Dhan (P1), 5paisa (P2)
+- Railway deployment
+- Profile data wired into chat.js system prompt
+
+### Uncommitted Changes Sitting in Repo
+- `backend/src/server.js`, `tools/executor.js`, `tools/index.js`, `docs/ARCHITECTURE.md` (modified)
+- `backend/src/routes/calendar.js`, `docs/VISION.md`, `mobile/services/health.js`, `mobile/services/healthKit.js` (new, untracked)
+
+### Next Up (in order)
+1. Commit the uncommitted changes above
+2. Run SQL in Supabase: `notifications.sql` → `health_data.sql` → `journal_entries.sql` → `career_profiles.sql` → `indexes_and_rls.sql`
+3. Build onboarding: `user_profiles.sql` → `onboarding.js` route → `repositories/index.js` (userProfiles) → `OnboardingFlow.js` → `OnboardingCard.js`
+4. Upstox broker integration (P0)
+5. Deploy to Railway
+
 ## gstack
 
 gstack skills are installed at `.claude/skills/gstack`. Use these for all workflows:
@@ -21,8 +52,7 @@ gstack skills are installed at `.claude/skills/gstack`. Use these for all workfl
 - `/document-release` — post-ship doc updates
 - `/gstack-upgrade` — upgrade gstack
 
-**Note:** `/browse` skill requires bun (not available on this machine) — skip browser-based skills.
-Never use `mcp__claude-in-chrome__*` tools.
+**Note:** Never use `mcp__claude-in-chrome__*` tools.
 
 ## Automation (everything-claude-code hooks)
 
@@ -33,7 +63,13 @@ Hooks are active at `.claude/settings.json`:
 - **UserPromptSubmit** → session start context load
 
 ## What This Is
-A personal AI assistant mobile app for Indian users (28–35). Chat interface (like ChatGPT) connecting to Zerodha, Angel One, Gmail, financial data APIs, bank SMS, and mutual funds. Backend Node.js, mobile React Native + Expo (Android-first).
+> **Your life's control room — one AI that knows your money, career, health, and mood, and connects the dots between them.**
+
+Personal AI assistant for Indian users (28–35). Chat-first interface. 6 life domains: Money, Wealth, Career, Health, Mind, Time. Connects to 6 brokers, Gmail, bank SMS, health data, mutual funds. The moat is **cross-domain intelligence** — insights no single-domain app can provide.
+
+Backend: Node.js + Express. Mobile: React Native + Expo (Android-first). AI: OpenAI GPT-4o-mini with 21+ tools.
+
+Full product vision, strategy, and 10-day sprint plan: **`docs/VISION.md`**
 
 ## Folder Structure
 ```
@@ -63,10 +99,16 @@ D:\OPENCLAW CHANDAN\
 │   │   │   ├── chat.js            ← POST /api/chat (tool loop + memory). GET /history. GET /facts
 │   │   │   ├── zerodha.js         ← Zerodha OAuth + token storage. Token expiry → auto-clear.
 │   │   │   ├── angelone.js        ← Angel One SmartAPI TOTP auth. Token expiry → auto-clear.
+│   │   │   ├── upstox.js          ← ⬜ Upstox OAuth2 + token storage (P0)
+│   │   │   ├── fyers.js           ← ⬜ Fyers OAuth2 + token storage (P1)
+│   │   │   ├── dhan.js            ← ⬜ Dhan token auth + holdings (P1)
+│   │   │   ├── fivepaisa.js       ← ⬜ 5paisa OAuth2 + TOTP (P2)
 │   │   │   ├── gmail.js           ← Google OAuth2, fetchEmails(), searchEmails()
+│   │   │   ├── calendar.js        ← Google Calendar OAuth2, schedule, free slots (Kaal agent)
 │   │   │   ├── cas.js             ← POST /api/cas/upload — CASParser MF integration
 │   │   │   ├── sms.js             ← POST /api/sms/transactions, GET /api/sms/spending, sync-email
 │   │   │   ├── journal.js         ← Daily journal, mood detection, insights
+│   │   │   ├── onboarding.js       ← POST /api/onboarding/profile — Cleo-style user profiling
 │   │   │   ├── career.js          ← Resume parse, job scoring (ApplyPilot pattern), tracker
 │   │   │   ├── health.js          ← Health sync + spending correlation (Arogya agent)
 │   │   │   ├── workflows.js       ← GET /api/workflows, POST /trigger/:name, notifications CRUD
@@ -89,6 +131,7 @@ D:\OPENCLAW CHANDAN\
 │   │       └── screener.js        ← Scrapes screener.in for financials/concalls
 │   ├── sql/
 │   │   ├── sms_transactions.sql   ← ✅ Run in Supabase
+│   │   ├── user_profiles.sql      ← ⬜ Run in Supabase (onboarding profile data)
 │   │   ├── notifications.sql      ← ⬜ Run in Supabase (notifications table + RLS)
 │   │   ├── career_profiles.sql    ← ⬜ Run in Supabase
 │   │   ├── journal_entries.sql    ← ⬜ Run in Supabase
@@ -99,22 +142,37 @@ D:\OPENCLAW CHANDAN\
 │   ├── android/                   ← Generated by expo prebuild ✅ (do not manually edit)
 │   ├── screens/
 │   │   ├── ChatScreen.js          ← Main chat UI. KeyboardAvoidingView fix. Animated send button.
-│   │   └── OnboardingScreen.js    ← 5-step onboarding (name→goals→broker→SMS→ready)
+│   │   ├── OnboardingFlow.js      ← Cleo-style 10-screen adaptive onboarding (REPLACES OnboardingScreen.js)
+│   │   └── OnboardingScreen.js    ← OLD 5-step onboarding — TO BE DELETED after OnboardingFlow.js is built
 │   ├── hooks/
 │   │   └── useChat.js             ← Chat state + API logic extracted from ChatScreen (myChat pattern)
 │   ├── services/
 │   │   ├── api.js                 ← sendMessage() + getChatHistory()
 │   │   ├── smsParser.js           ← Reads bank SMS, parses, syncs to backend (Artha agent)
-│   │   ├── healthConnect.js       ← Health Connect integration: steps, sleep, HR → /api/health/sync
+│   │   ├── health.js              ← Unified health service — auto-picks Android/iOS
+│   │   ├── healthConnect.js       ← Android: Health Connect (steps, sleep, HR → /api/health/sync)
+│   │   ├── healthKit.js           ← iOS: Apple HealthKit (steps, sleep, HR → /api/health/sync)
 │   │   ├── config.js              ← BACKEND_URL (local vs Railway)
 │   │   └── accessibility.js       ← STUB ONLY — never use for data reading
 │   ├── components/
 │   │   ├── MessageBubble.js
-│   │   └── TypingIndicator.js
+│   │   ├── TypingIndicator.js
+│   │   └── OnboardingCard.js      ← Reusable one-question card (skip, reaction text, haptics)
 │   ├── modules/clutch-accessibility/  ← STUB ONLY — do not build out
 │   └── app.json                   ← Expo config (READ_SMS + RECEIVE_SMS permissions declared)
 ├── docs/
-│   └── ARCHITECTURE.md            ← Layer map, all design decisions, source repos, how to extend
+│   ├── ARCHITECTURE.md            ← Layer map, all design decisions, source repos, how to extend
+│   ├── VISION.md                  ← Product vision, strategy, monetization, 10-day sprint plan
+│   ├── prd.md                     ← PRD v2 — feature status, acceptance criteria, launch checklist
+│   ├── cleo_design_reference.md   ← Cleo AI UI/UX deep dive — colors, typography, chat, onboarding, gamification
+│   ├── competitor_analysis.md     ← Strategic positioning map + threat levels
+│   ├── competitor_deep_dive.md    ← Feature-level analysis of Cleo/CRED/Groww/Fi/Mint + killer features to build
+│   ├── market_research.md         ← $793B TAM, SAM 25M users, Cleo $280M ARR validation
+│   ├── breakeven_analysis.md      ← Unit economics — breakeven at 30 users, 91% margins
+│   ├── gtm_strategy.md            ← 4-phase GTM: friends → YouTube creators → paid → scale
+│   ├── tone_personas.md           ← 3 AI personas: Bhai/Pro/Mentor with voice rules + examples
+│   ├── product_management.md      ← Sprint structure, roadmap, feature checklists
+│   └── supabase-schema.sql        ← Combined SQL schema reference
 ├── .env                           ← NEVER commit this
 ├── plan.md
 └── CLAUDE.md                      ← This file
@@ -150,21 +208,168 @@ User types message
 4. Wrap with `withCache(key, TTL.X, fn)` if it calls external APIs
 
 ## Adding a New Broker (THE PATTERN)
-1. Create `backend/src/routes/[broker].js` — OAuth + token storage
+1. Create `backend/src/routes/[broker].js` — OAuth/TOTP + token storage
 2. Add one adapter entry to `backend/src/brokers/index.js` (isConnected + getHoldings)
 3. Register route in `server.js`
 4. Mobile: add broker logo/connect button in ChatScreen status bar
 > broker adapter auto-merges new broker into portfolio — no executor.js changes needed
 
+## Broker Integration Plan (6 Brokers → ~90% coverage)
+| # | Broker | API | Auth | Cost | Status | Priority |
+|---|--------|-----|------|------|--------|----------|
+| 1 | **Zerodha** | KiteConnect | OAuth2 + request_token | Rs 2000/mo | ✅ Built | — |
+| 2 | **Angel One** | SmartAPI | Client ID + TOTP | Free | ✅ Built | — |
+| 3 | **Upstox** | Upstox API v2 | OAuth2 | Free | ⬜ Next | P0 |
+| 4 | **Fyers** | Fyers API v3 | OAuth2 | Free | ⬜ Planned | P1 |
+| 5 | **Dhan** | DhanHQ API | Access Token | Free | ⬜ Planned | P1 |
+| 6 | **5paisa** | 5paisa API | OAuth2 + TOTP | Free | ⬜ Planned | P2 |
+
+### API Docs & SDKs
+| Broker | API Docs | npm/SDK | Auth Flow |
+|--------|----------|---------|-----------|
+| Upstox | developer.upstox.com | `upstox-js-sdk` | OAuth2 → access_token → REST/WebSocket |
+| Fyers | myapi.fyers.in/docsv3 | `fyers-api-v3` | OAuth2 → access_token → REST/WebSocket |
+| Dhan | dhanhq.co/docs | `dhanhq` | API key + access_token from login |
+| 5paisa | developer.5paisa.com | `5paisa-js` | OAuth2 + TOTP → request_token → REST |
+
+### Integration Order
+1. **Upstox** (largest free user base, OAuth2 same pattern as Zerodha)
+2. **Fyers** (clean v3 API, OAuth2)
+3. **Dhan** (modern REST, simple token auth)
+4. **5paisa** (TOTP flow similar to Angel One)
+
+### Per-Broker File Pattern
+```
+backend/src/routes/upstox.js      ← OAuth + token storage + getHoldings()
+backend/src/routes/fyers.js       ← OAuth + token storage + getHoldings()
+backend/src/routes/dhan.js        ← Token auth + getHoldings()
+backend/src/routes/fivepaisa.js   ← OAuth + TOTP + getHoldings()
+```
+Each route file: OAuth/auth flow → store tokens in `connected_apps` → export getHoldings().
+Each broker gets ONE entry in `brokers/index.js` adapters array. That's it.
+
+## Onboarding — Cleo AI-Inspired Experience
+
+### Design Spec (For Builder)
+Full spec in `docs/VISION.md` → "Onboarding — Cleo AI-Inspired Experience"
+
+### Files to Create
+```
+mobile/screens/OnboardingFlow.js      ← REPLACES OnboardingScreen.js (delete old one)
+mobile/components/OnboardingCard.js   ← Reusable one-question card with skip, reaction text
+backend/src/routes/onboarding.js      ← POST /api/onboarding/profile, GET /api/onboarding/profile/:userId
+backend/sql/user_profiles.sql         ← user_profiles table + RLS
+```
+
+### Color Palette (Use These Exact Values)
+```
+Primary BG:     #2D1B14  (deep cocoa — all backgrounds)
+Card BG:        #3A2820  (warm dark brown — cards, inputs)
+Accent/CTA:     #FFE36D  (warm yellow — buttons, highlights)
+Success:        #4CAF50  (green — money positive)
+Alert:          #FF6B6B  (soft red — warnings)
+Text Primary:   #F5F0EB  (warm white)
+Text Secondary: #B8A99A  (muted warm)
+```
+Dark mode default. No blues. No pure white/black.
+
+### Onboarding Flow (Adaptive Branching)
+10 screens max. Every screen has "Skip" except name. Every answer triggers an instant AI micro-insight.
+
+1. Name (mandatory)
+2. Age (slider)
+3. City (autocomplete Indian cities)
+4. Student or Working? (two big cards) → BRANCHING POINT
+5. [Working] CTC slider → instant take-home calc | [Student] Field + year
+6. [Working] EMI yes/no + amount → debt ratio shown | [Student] Enable Karma job agent
+7. "What matters most?" multi-select → sets first agent greeting
+8. "Into fitness? Got a tracker?" → Health Connect or skip
+9. "How are you save?" MF/Stocks/Gold/FD/Nothing + assets (car/bike/house if working)
+10. Connect services (Broker / Gmail / MF Statement / Skip all)
+
+→ First chat message uses ALL collected data for personalized greeting.
+
+### user_profiles Table Schema
+```sql
+CREATE TABLE user_profiles (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  age INTEGER,
+  city TEXT,
+  mobile TEXT,
+  email TEXT,
+  height_cm NUMERIC,
+  weight_kg NUMERIC,
+  occupation TEXT CHECK (occupation IN ('student', 'working')),
+  -- Student fields
+  college TEXT,
+  field_of_study TEXT,
+  study_year INTEGER,
+  job_feature_enabled BOOLEAN DEFAULT false,
+  -- Working fields
+  annual_ctc NUMERIC,
+  monthly_emi NUMERIC,
+  company TEXT,
+  role TEXT,
+  -- Lifestyle
+  fitness_active BOOLEAN DEFAULT false,
+  has_fitness_tracker BOOLEAN DEFAULT false,
+  tracker_type TEXT,
+  -- Savings & Assets
+  savings_methods TEXT[] DEFAULT '{}',   -- ['mf', 'stocks', 'gold', 'fd']
+  owns_car BOOLEAN DEFAULT false,
+  owns_bike BOOLEAN DEFAULT false,
+  owns_house BOOLEAN DEFAULT false,
+  -- Priorities
+  domain_priorities TEXT[] DEFAULT '{}', -- ['money', 'career', 'health', 'mind']
+  -- Meta
+  profile_completeness INTEGER DEFAULT 0,
+  onboarding_completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
+```
+
+### Repository Addition (repositories/index.js)
+Add `userProfiles` repo with: `create(profile)`, `getByUserId(userId)`, `update(userId, fields)`
+
+### Server.js Registration
+```js
+app.use('/api/onboarding', require('./routes/onboarding'));
+```
+
+### How Profile Data Feeds AI
+In `routes/chat.js`, load user profile alongside facts (Tier 3). Inject into system prompt:
+```
+"User profile: {name}, {age}yo, {city}. {occupation}. CTC: {ctc}. EMI: {emi}.
+Saves via: {methods}. Priorities: {priorities}. Fitness: {active}."
+```
+Every agent response is personalized from day one.
+
+### Profile Completeness Nudging
+Not a screen — the AI nudges naturally in chat when profile_completeness < 100%:
+- Missing broker → "Connecting your broker takes 30 seconds. Want to?"
+- Missing MF → "Upload CAS and I'll show your real XIRR"
+- Missing health → "Connect Health Connect for sleep + step tracking"
+
+### Micro-Interactions (Mobile)
+- Haptic feedback on every card tap
+- Slide-up animation between screens
+- Progress dots at top (animated fill)
+- AI reaction text appears with typing animation after each answer
+
 ## Tone System
-Three AI personas, user switches in header:
-- `bhai` — casual, Hinglish, brutally honest
-- `pro` — data-first, no fluff (default)
-- `mentor` — patient, explains why, reassuring
+Three AI personas with visual chat skins (Cleo-inspired mode switching):
+- `bhai` — casual, Hinglish, brutally honest → **orange/yellow chat skin**
+- `pro` — data-first, no fluff (default) → **clean brown/white skin**
+- `mentor` — patient, explains why, reassuring → **soft purple/blue skin**
 
 Defined in `backend/src/lib/ai.js` → `TONE_PROMPTS`
 
-## Agent System (5 Agents)
+## Agent System (6 Agents — 6 Life Domains)
 | Agent | Name | Domain |
 |-------|------|--------|
 | Vriddhi | Investments | Portfolio, stocks, MFs, financials |
@@ -172,11 +377,12 @@ Defined in `backend/src/lib/ai.js` → `TONE_PROMPTS`
 | Chitta | Journaling | Daily check-in, mood tracking, insights |
 | Karma | Career | Resume, jobs, interviews, salary negotiation |
 | Arogya | Health | Steps, sleep, heart rate, health-spending correlation |
+| Kaal | Time | Calendar, meetings, free slots, schedule awareness |
 
-## Current Tools (21 total)
+## Current Tools (27 total)
 | Tool | Agent | What it does |
 |------|-------|-------------|
-| `get_portfolio` | Vriddhi | Zerodha + Angel One holdings merged (via brokers/index.js) |
+| `get_portfolio` | Vriddhi | All connected broker holdings merged (via brokers/index.js) |
 | `get_stock_price` | Vriddhi | Live price + change (Yahoo Finance) |
 | `get_portfolio_chart` | Vriddhi | 1yr historical portfolio value |
 | `get_financials` | Vriddhi | 3yr financials from screener.in |
@@ -200,6 +406,9 @@ Defined in `backend/src/lib/ai.js` → `TONE_PROMPTS`
 | `score_job_fit` | Karma | Score resume vs JD (1-10), ATS keywords, gap analysis |
 | `get_health_summary` | Arogya | Steps, sleep, HR, activity summary |
 | `get_health_spending_correlation` | Arogya | Sleep→spending, activity→spending patterns |
+| `get_today_schedule` | Kaal | Today's meetings, free hours, event list |
+| `get_upcoming_events` | Kaal | Next N days calendar events grouped by day |
+| `get_free_slots` | Kaal | Free time slots today (30min+ blocks, 9am-6pm) |
 
 ## Architecture Layers
 | Layer | File | Purpose |
@@ -223,6 +432,7 @@ Full architecture doc: `docs/ARCHITECTURE.md`
 | `connected_apps` | OAuth tokens + metadata snapshots (portfolio_snapshot) | ✅ Created |
 | `user_facts` | Long-term memory facts (Tier 3) | ✅ Created |
 | `sms_transactions` | Bank SMS + email parsed transactions (Artha) | ✅ Created |
+| `user_profiles` | Onboarding profile: name, age, salary, EMI, fitness, savings, assets | ⬜ Run `user_profiles.sql` |
 | `notifications` | In-app notifications for all agents | ⬜ Run `notifications.sql` |
 | `journal_entries` | Daily journal with mood + tags (Chitta) | ⬜ Run SQL |
 | `career_profiles` | Parsed resume data (Karma) | ⬜ Run SQL |
@@ -238,11 +448,14 @@ Full architecture doc: `docs/ARCHITECTURE.md`
 - `source` field: `'sms'` | `'email'` | `'both'` (both = cross-verified, most reliable)
 - Categories: food_delivery, shopping, fuel, transport, subscriptions, health, bills, investments, emi_loan, dining_out, others
 
-## Health Connect (Arogya Agent)
-- Mobile: `mobile/services/healthConnect.js` — reads Steps, HeartRate, SleepSession, Calories from Android Health Connect
-- Syncs to `POST /api/health/sync` → stored in `health_data` table
+## Health Integration (Arogya Agent)
+- **Unified API:** `mobile/services/health.js` — auto-picks Android or iOS, single import for the app
+- **Android:** `healthConnect.js` — Health Connect (Steps, HeartRate, SleepSession, Calories). Requires `react-native-health-connect` + Android 9+
+- **iOS:** `healthKit.js` — Apple HealthKit (StepCount, HeartRate, SleepAnalysis, ActiveEnergyBurned). Requires `react-native-health`
+- Both sync to `POST /api/health/sync` → stored in `health_data` table
+- Same data shape from both platforms — backend doesn't care about source
 - `syncHealthData(userId, days)` — call on app foreground or morning check-in
-- Requires `react-native-health-connect` package + Android 9+
+- Covers 95%+ of Indian wearables: Noise, Fire-Boltt, boAt, Xiaomi, Samsung, Apple Watch, Amazfit all sync to Health Connect/HealthKit
 
 ## Mutual Funds (CASParser)
 - User uploads CAMS or KFintech CAS PDF → POST /api/cas/upload
@@ -256,7 +469,8 @@ Full architecture doc: `docs/ARCHITECTURE.md`
 - Do NOT store raw financial data in DB — fetch live every time
 - Do NOT store raw SMS body — only parsed amount + merchant + date
 - Do NOT hardcode API keys — always use `.env`
-- Do NOT add Groww paid API until Angel One (free) is fully validated
+- Do NOT add Groww — no public API available
+- Do NOT integrate brokers outside the 6 planned (Zerodha, Angel One, Upstox, Fyers, Dhan, 5paisa) without discussion
 - Do NOT edit `android/` folder manually — it's generated by `expo prebuild`
 - Do NOT call Supabase directly in routes — use `repositories/index.js`
 - Do NOT add broker logic to executor.js — use `brokers/index.js` adapter
@@ -271,9 +485,20 @@ ZERODHA_API_SECRET=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GMAIL_REDIRECT_URI=http://127.0.0.1:3000/api/gmail/callback
+CALENDAR_REDIRECT_URI=http://127.0.0.1:3000/api/calendar/callback
 SUPABASE_URL=https://awskiypdukdcugkzhsbt.supabase.co
 SUPABASE_ANON_KEY=
 ANGEL_ONE_API_KEY=
+UPSTOX_API_KEY=
+UPSTOX_API_SECRET=
+FYERS_APP_ID=
+FYERS_SECRET_ID=
+DHAN_CLIENT_ID=
+DHAN_ACCESS_TOKEN=
+FIVEPAISA_APP_NAME=
+FIVEPAISA_APP_SOURCE=
+FIVEPAISA_USER_KEY=
+FIVEPAISA_ENCRYPTION_KEY=
 CASPARSER_API_KEY=sandbox-with-json-responses
 PORT=3000
 LOG_LEVEL=info
@@ -281,10 +506,35 @@ ALLOWED_ORIGINS=
 SCHEDULER_USER_IDS=   ← comma-separated user IDs to enable background workflow sync
 ```
 
-## Next Build Priorities
-1. **Run SQL in Supabase** — in order: `notifications.sql`, `health_data.sql`, `journal_entries.sql`, `career_profiles.sql`, then `indexes_and_rls.sql`
-2. **Test workflows via HTTP** — `POST /api/workflows/trigger/emailSync` + `GET /api/workflows/notifications`
-3. **Run mobile** — `npx expo run:android`, test SMS permission + onboarding + input bar fix
-4. **Health Connect install** — `npm install react-native-health-connect` in mobile, rebuild
-5. **Deploy to Railway** — backend live URL, set `SCHEDULER_USER_IDS` in Railway env vars
-6. **Mobile polish** — markdown rendering in MessageBubble, chart display, notification bell in header
+## 10-Day Sprint (2026-03-25 → 2026-04-04)
+Full plan in `docs/VISION.md`. Summary:
+
+### Days 1-2: Foundation
+1. Run ALL SQL in Supabase: `notifications.sql`, `health_data.sql`, `journal_entries.sql`, `career_profiles.sql`, `indexes_and_rls.sql`
+2. Deploy backend to Railway with all env vars
+3. Mobile build stable on real device + fix input bar
+4. End-to-end test: message → AI response on phone
+
+### Days 3-4: Broker Blitz
+5. Upstox OAuth2 + adapter (P0)
+6. Fyers OAuth2 + adapter (P1)
+7. Dhan token auth + adapter (P1)
+8. 5paisa OAuth+TOTP + adapter (P2)
+
+### Days 5-6: Cross-Domain Intelligence (THE MAGIC)
+9. Sunday Briefing — weekly report across all 6 life domains
+10. Pattern detection — sleep→spending, mood→portfolio, stress→impulse-buying
+11. Stealth insights — proactive notifications
+12. "Should I?" purchase advisor with real financial context
+
+### Days 7-8: Polish & UX
+13. Simplify onboarding (2 steps max)
+14. Markdown rendering in MessageBubble
+15. Contextual connection prompts inline in chat
+16. Notification bell + display
+
+### Days 9-10: Ship
+17. Test on 3+ real devices with 5 real users
+18. Fix critical bugs
+19. Play Store internal testing track
+20. Landing page with demo videos

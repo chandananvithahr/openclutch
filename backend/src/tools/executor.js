@@ -1,6 +1,7 @@
 // Tool executor — when OpenAI calls a tool, this runs the actual function
 
 const gmail        = require('../routes/gmail');
+const calendar     = require('../routes/calendar');
 const cas          = require('../routes/cas');
 const sms          = require('../routes/sms');
 const screener     = require('../services/screener');
@@ -69,6 +70,15 @@ async function executeTool(toolName, toolArgs, userContext) {
       return await career.trackJobApplication(toolArgs.company, toolArgs.role, toolArgs.status, userContext.userId);
     case 'score_job_fit':
       return await career.scoreJobFit(toolArgs.job_description, userContext.userId);
+    // --- Kaal Agent: Time/Productivity ---
+    case 'get_today_schedule':
+      return await withCache(`schedule:${userContext.userId}:today`, TTL.STOCK_PRICE,
+        () => getTodaySchedule(userContext));
+    case 'get_upcoming_events':
+      return await withCache(`schedule:${userContext.userId}:upcoming:${toolArgs.days || 7}`, TTL.STOCK_PRICE,
+        () => getUpcomingEvents(toolArgs.days || 7, userContext));
+    case 'get_free_slots':
+      return await getFreeSlots(userContext);
     // --- Arogya Agent: Health ---
     case 'get_health_summary':
       return await health.getHealthSummary(userContext.userId, toolArgs.days || 7);
@@ -401,6 +411,49 @@ async function getNetWorth(userContext) {
       salary.salary_detected ? 'SMS/Email (Bank balance estimate)' : null,
     ].filter(Boolean),
   };
+}
+
+// --- Calendar (Kaal Agent) ---
+async function getTodaySchedule(userContext) {
+  if (!calendar.isConnected()) {
+    return {
+      error: 'Google Calendar not connected',
+      action: 'Ask the user to connect Google Calendar to see their schedule.',
+    };
+  }
+  try {
+    return await calendar.getTodaySchedule();
+  } catch (err) {
+    return { error: `Failed to fetch schedule: ${err.message}` };
+  }
+}
+
+async function getUpcomingEvents(days, userContext) {
+  if (!calendar.isConnected()) {
+    return {
+      error: 'Google Calendar not connected',
+      action: 'Ask the user to connect Google Calendar to see upcoming events.',
+    };
+  }
+  try {
+    return await calendar.getUpcomingEvents(days);
+  } catch (err) {
+    return { error: `Failed to fetch upcoming events: ${err.message}` };
+  }
+}
+
+async function getFreeSlots(userContext) {
+  if (!calendar.isConnected()) {
+    return {
+      error: 'Google Calendar not connected',
+      action: 'Ask the user to connect Google Calendar to find free slots.',
+    };
+  }
+  try {
+    return await calendar.getFreeSlots();
+  } catch (err) {
+    return { error: `Failed to find free slots: ${err.message}` };
+  }
 }
 
 module.exports = { executeTool };
