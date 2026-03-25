@@ -50,8 +50,10 @@ function buildSystemPrompt(tone, connectedServices) {
 }
 
 // Non-streaming chat (tool detection + tool result synthesis)
-async function chat({ messages, tools = [], tone = 'pro', connectedServices = [] }) {
-  const systemPrompt = buildSystemPrompt(tone, connectedServices);
+// systemExtra: optional extra instruction appended to system prompt (used by file analysis)
+async function chat({ messages, tools = [], tone = 'pro', connectedServices = [], systemExtra = '' }) {
+  let systemPrompt = buildSystemPrompt(tone, connectedServices);
+  if (systemExtra) systemPrompt += `\n\n${systemExtra}`;
   const safeMessages = messages.slice(-config.MAX_MESSAGES_TO_LLM);
 
   const response = await openai.chat.completions.create({

@@ -3,6 +3,7 @@ const router = express.Router();
 const { KiteConnect } = require('kiteconnect');
 const repos = require('../repositories');
 const logger = require('../lib/logger');
+const { generateState, validateState } = require('../lib/oauthState');
 
 const kite = new KiteConnect({
   api_key: process.env.ZERODHA_API_KEY,
@@ -26,7 +27,9 @@ loadTokenFromDB().catch(err => logger.error('Zerodha token load failed', { err: 
 // Step 1: Generate Zerodha login URL
 // GET /api/zerodha/login — returns JSON for app, redirects for browser
 router.get('/login', (req, res) => {
-  const loginUrl = kite.getLoginURL();
+  const state = generateState();
+  const base = kite.getLoginURL();
+  const loginUrl = `${base}&state=${state}`;
   if (req.query.json === 'true' || req.headers.accept?.includes('application/json')) {
     return res.json({ loginUrl });
   }
@@ -36,8 +39,11 @@ router.get('/login', (req, res) => {
 // Step 2: Zerodha redirects back here after user logs in
 // GET /api/zerodha/callback?request_token=XXXX
 router.get('/callback', async (req, res) => {
-  const { request_token } = req.query;
+  const { request_token, state } = req.query;
 
+  if (!validateState(state)) {
+    return res.status(403).send('Invalid or expired OAuth state. Please try connecting again.');
+  }
   if (!request_token) {
     return res.status(400).send('Missing request_token');
   }

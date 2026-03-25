@@ -78,6 +78,94 @@ const adapters = [
       }));
     },
   },
+
+  {
+    name: 'Upstox',
+
+    isConnected() {
+      const u = require('../routes/upstox');
+      return !!u.getAccessToken();
+    },
+
+    async getHoldings() {
+      const u   = require('../routes/upstox');
+      const raw = await u.fetchHoldings();
+      return raw.map(h => normalizeHolding({
+        symbol:       h.symbol,
+        name:         h.name,
+        qty:          h.qty,
+        currentPrice: h.current_price,
+        avgPrice:     h.buy_price,
+        broker:       'Upstox',
+      }));
+    },
+  },
+
+  {
+    name: 'Fyers',
+
+    isConnected() {
+      const f = require('../routes/fyers');
+      return !!f.getAccessToken();
+    },
+
+    async getHoldings() {
+      const f   = require('../routes/fyers');
+      const raw = await f.fetchHoldings();
+      return raw.map(h => normalizeHolding({
+        symbol:       h.symbol,
+        name:         h.name,
+        qty:          h.qty,
+        currentPrice: h.current_price,
+        avgPrice:     h.buy_price,
+        broker:       'Fyers',
+      }));
+    },
+  },
+
+  {
+    name: 'Dhan',
+
+    isConnected() {
+      const d = require('../routes/dhan');
+      return !!d.getAccessToken();
+    },
+
+    async getHoldings() {
+      const d   = require('../routes/dhan');
+      const raw = await d.fetchHoldings();
+      return raw.map(h => normalizeHolding({
+        symbol:       h.symbol,
+        name:         h.name,
+        qty:          h.qty,
+        currentPrice: h.current_price,
+        avgPrice:     h.buy_price,
+        broker:       'Dhan',
+      }));
+    },
+  },
+
+  {
+    name: '5paisa',
+
+    isConnected() {
+      const f = require('../routes/fivepaisa');
+      return !!f.getAccessToken();
+    },
+
+    async getHoldings() {
+      const f   = require('../routes/fivepaisa');
+      const raw = await f.fetchHoldings();
+      return raw.map(h => normalizeHolding({
+        symbol:       h.symbol,
+        name:         h.name,
+        qty:          h.qty,
+        currentPrice: h.current_price,
+        avgPrice:     h.buy_price,
+        broker:       '5paisa',
+      }));
+    },
+  },
 ];
 
 // ─── Unified portfolio ────────────────────────────────────────────────────────

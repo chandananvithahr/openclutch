@@ -219,11 +219,11 @@ const connectedApps = {
 // ─── Health Data ─────────────────────────────────────────────────────────────
 
 const healthData = {
-  // Upsert one day of health metrics (dedup by user_id + date)
+  // Upsert one day of health metrics (dedup by user_id + entry_date)
   async upsert(row) {
     const { error } = await supabase
       .from('health_data')
-      .upsert(row, { onConflict: 'user_id,date' });
+      .upsert(row, { onConflict: 'user_id,entry_date' });
     return { error };
   },
 
@@ -231,11 +231,11 @@ const healthData = {
   async queryRange(userId, startDate, endDate) {
     const { data, error } = await supabase
       .from('health_data')
-      .select('date, steps, sleep_hours, heart_rate_avg, calories_burned, active_calories')
+      .select('entry_date, steps, sleep_hours, heart_rate_avg, heart_rate_min, heart_rate_max, calories_burned, active_minutes')
       .eq('user_id', userId)
-      .gte('date', startDate)
-      .lte('date', endDate)
-      .order('date', { ascending: true });
+      .gte('entry_date', startDate)
+      .lte('entry_date', endDate)
+      .order('entry_date', { ascending: true });
     return { data: data || [], error };
   },
 
@@ -245,10 +245,10 @@ const healthData = {
     since.setDate(since.getDate() - days);
     const { data, error } = await supabase
       .from('health_data')
-      .select('date, steps, sleep_hours, heart_rate_avg, calories_burned, active_calories')
+      .select('entry_date, steps, sleep_hours, heart_rate_avg, heart_rate_min, heart_rate_max, calories_burned, active_minutes')
       .eq('user_id', userId)
-      .gte('date', since.toISOString().slice(0, 10))
-      .order('date', { ascending: false });
+      .gte('entry_date', since.toISOString().slice(0, 10))
+      .order('entry_date', { ascending: false });
     return { data: data || [], error };
   },
 };
@@ -415,6 +415,47 @@ const notificationsRepo = {
   },
 };
 
+// ─── User Profiles (Onboarding) ─────────────────────────────────────────────
+
+const userProfiles = {
+  async create(profile) {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .insert(profile)
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  async getByUserId(userId) {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+    return { data, error };
+  },
+
+  async update(userId, fields) {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .update({ ...fields, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  async upsert(profile) {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .upsert({ ...profile, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+      .select()
+      .single();
+    return { data, error };
+  },
+};
+
 // ─── Memories (Vector / pgvector) ───────────────────────────────────────────
 
 const memories = {
@@ -452,4 +493,5 @@ module.exports = {
   jobApplications,
   notifications: notificationsRepo,
   memories,
+  userProfiles,
 };

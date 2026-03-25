@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, ActivityIndicator } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import OnboardingScreen from './screens/OnboardingScreen';
+import OnboardingFlow from './screens/OnboardingFlow';
 import ChatScreen from './screens/ChatScreen';
 
 const Stack = createStackNavigator();
@@ -22,8 +22,8 @@ export default function App() {
   // Show spinner while checking AsyncStorage
   if (!initialRoute) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
-        <ActivityIndicator size="large" color="#6C63FF" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#2D1B14' }}>
+        <ActivityIndicator size="large" color="#FFE36D" />
       </View>
     );
   }
@@ -35,7 +35,7 @@ export default function App() {
           initialRouteName={initialRoute}
           screenOptions={{ headerShown: false }}
         >
-          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+          <Stack.Screen name="Onboarding" component={OnboardingFlow} />
           <Stack.Screen name="Chat" component={ChatScreen} />
         </Stack.Navigator>
       </NavigationContainer>

@@ -1,0 +1,269 @@
+'use strict';
+
+// Google Drive integration — OAuth2 + file listing + file content reading
+// Same OAuth pattern as gmail.js and calendar.js
+//
+// Flow:
+//   1. GET /api/drive/login       → redirect to Google OAuth (Drive scope)
+//   2. GET /api/drive/callback    → exchange code for tokens, store in Supabase
+//   3. GET /api/drive/files       → list recent files (PDF, Excel, CSV, Docs)
+//   4. POST /api/drive/analyze    → read a Drive file by ID → AI analysis
+//   5. GET /api/drive/status      → { connected: bool }
+//   6. POST /api/drive/disconnect → clear tokens
+
+const express    = require('express');
+const { google } = require('googleapis');
+const axios      = require('axios');
+const repos      = require('../repositories');
+const logger     = require('../lib/logger');
+const { generateState, validateState } = require('../lib/oauthState');
+const { chat }   = require('../lib/ai');
+const { asyncHandler, HTTPError } = require('../middleware/errors');
+const pdfParse   = require('pdf-parse');
+const xlsx       = require('xlsx');
+
+const router = express.Router();
+
+const REDIRECT_URI = process.env.DRIVE_REDIRECT_URI || 'http://127.0.0.1:3000/api/drive/callback';
+
+// File types we support reading from Drive
+const READABLE_MIME_TYPES = {
+  'application/pdf':                                                              'pdf',
+  'application/vnd.ms-excel':                                                    'excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':           'excel',
+  'text/csv':                                                                     'csv',
+  'application/vnd.google-apps.spreadsheet':                                     'gsheet',  // export as xlsx
+  'application/vnd.google-apps.document':                                        'gdoc',    // export as plain text
+};
+
+const MAX_TEXT_FOR_AI = 12_000;
+
+let driveTokens = null;
+
+function createOAuthClient() {
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    REDIRECT_URI,
+  );
+}
+
+async function loadTokensFromDB() {
+  const { data } = await repos.connectedApps.loadToken('default_user', 'google_drive');
+  if (data?.access_token) {
+    driveTokens = JSON.parse(data.access_token);
+    logger.info('Google Drive tokens loaded from Supabase');
+  }
+}
+
+loadTokensFromDB().catch(err => logger.error('Drive token load failed', { err: err.message }));
+
+function getDriveClient() {
+  if (!driveTokens) throw new HTTPError(401, 'Google Drive not connected. Visit /api/drive/login first.');
+  const oauth2Client = createOAuthClient();
+  oauth2Client.setCredentials(driveTokens);
+  return google.drive({ version: 'v3', auth: oauth2Client });
+}
+
+// ── OAuth ────────────────────────────────────────────────────────────────────
+
+router.get('/login', (req, res) => {
+  const oauth2Client = createOAuthClient();
+  const url = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: ['https://www.googleapis.com/auth/drive.readonly'],
+    prompt: 'consent',
+    state: generateState(),
+  });
+  if (req.query.json === 'true' || req.headers.accept?.includes('application/json')) {
+    return res.json({ loginUrl: url });
+  }
+  res.redirect(url);
+});
+
+router.get('/callback', asyncHandler(async (req, res) => {
+  const { code, state } = req.query;
+  if (!validateState(state)) {
+    return res.status(403).send('Invalid or expired OAuth state. Please try connecting again.');
+  }
+  if (!code) return res.status(400).send('Missing code');
+
+  const oauth2Client = createOAuthClient();
+  const { tokens } = await oauth2Client.getToken(code);
+  driveTokens = tokens;
+
+  await repos.connectedApps.saveToken('default_user', 'google_drive', {
+    accessToken: JSON.stringify(tokens),
+  });
+
+  logger.info('Google Drive connected');
+
+  res.send(`
+    <html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#2D1B14;color:#F5F0EB">
+      <h2 style="color:#FFE36D">✅ Google Drive Connected!</h2>
+      <p>Clutch can now read your Drive files.</p>
+      <p>Close this tab and go back to the chat.</p>
+      <script>setTimeout(() => window.close(), 3000)</script>
+    </body></html>
+  `);
+}));
+
+router.get('/status', (req, res) => {
+  res.json({ connected: !!driveTokens });
+});
+
+router.post('/disconnect', asyncHandler(async (req, res) => {
+  driveTokens = null;
+  await repos.connectedApps.saveToken('default_user', 'google_drive', { accessToken: null });
+  res.json({ success: true });
+}));
+
+// ── File listing ─────────────────────────────────────────────────────────────
+
+// GET /api/drive/files?query=budget&pageSize=20
+router.get('/files', asyncHandler(async (req, res) => {
+  const drive    = getDriveClient();
+  const pageSize = Math.min(parseInt(req.query.pageSize || '20', 10), 50);
+  const query    = req.query.query;
+
+  // Build Drive query — only file types we can read
+  const mimeFilter = Object.keys(READABLE_MIME_TYPES)
+    .map(m => `mimeType='${m}'`)
+    .join(' or ');
+
+  const q = query
+    ? `(${mimeFilter}) and name contains '${query.replace(/'/g, "\\'")}' and trashed=false`
+    : `(${mimeFilter}) and trashed=false`;
+
+  const response = await drive.files.list({
+    q,
+    pageSize,
+    orderBy: 'modifiedTime desc',
+    fields: 'files(id,name,mimeType,size,modifiedTime,webViewLink)',
+  });
+
+  const files = (response.data.files || []).map(f => ({
+    id:           f.id,
+    name:         f.name,
+    type:         READABLE_MIME_TYPES[f.mimeType] || 'unknown',
+    mimeType:     f.mimeType,
+    sizeMB:       f.size ? (parseInt(f.size) / (1024 * 1024)).toFixed(2) : null,
+    modifiedTime: f.modifiedTime,
+    viewLink:     f.webViewLink,
+  }));
+
+  res.json({ files, count: files.length });
+}));
+
+// ── File reading + AI analysis ────────────────────────────────────────────────
+
+// POST /api/drive/analyze   body: { fileId, question?, tone? }
+router.post('/analyze', asyncHandler(async (req, res) => {
+  const { fileId, question, tone = 'pro' } = req.body;
+
+  if (!fileId) throw new HTTPError(400, 'fileId is required');
+
+  const drive = getDriveClient();
+
+  // Get file metadata first
+  const meta = await drive.files.get({
+    fileId,
+    fields: 'id,name,mimeType,size',
+  });
+
+  const { name, mimeType } = meta.data;
+  const fileType = READABLE_MIME_TYPES[mimeType];
+
+  if (!fileType) {
+    throw new HTTPError(422, `File type not supported for analysis: ${mimeType}`);
+  }
+
+  // Download / export file content
+  let buffer;
+  let effectiveMime = mimeType;
+
+  if (mimeType === 'application/vnd.google-apps.spreadsheet') {
+    // Export Google Sheet as Excel
+    const exported = await drive.files.export(
+      { fileId, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+      { responseType: 'arraybuffer' }
+    );
+    buffer = Buffer.from(exported.data);
+    effectiveMime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  } else if (mimeType === 'application/vnd.google-apps.document') {
+    // Export Google Doc as plain text
+    const exported = await drive.files.export(
+      { fileId, mimeType: 'text/plain' },
+      { responseType: 'arraybuffer' }
+    );
+    buffer = Buffer.from(exported.data);
+    effectiveMime = 'text/plain';
+  } else {
+    // Download binary file (PDF, Excel, CSV)
+    const downloaded = await drive.files.get(
+      { fileId, alt: 'media' },
+      { responseType: 'arraybuffer' }
+    );
+    buffer = Buffer.from(downloaded.data);
+  }
+
+  // Extract text from buffer
+  let text = '';
+  let metaExtra = {};
+
+  if (effectiveMime === 'application/pdf') {
+    const parsed = await pdfParse(buffer);
+    text = parsed.text;
+    metaExtra.pages = parsed.numpages;
+  } else if (effectiveMime === 'text/plain' || effectiveMime === 'text/csv') {
+    text = buffer.toString('utf-8');
+  } else {
+    // Excel
+    const workbook = xlsx.read(buffer, { type: 'buffer' });
+    const sheets = workbook.SheetNames.map(sheetName => {
+      const sheet = workbook.Sheets[sheetName];
+      return `--- Sheet: ${sheetName} ---\n${xlsx.utils.sheet_to_csv(sheet)}`;
+    });
+    text = sheets.join('\n\n');
+    metaExtra.sheets = workbook.SheetNames;
+  }
+
+  if (!text.trim()) {
+    throw new HTTPError(422, 'Could not extract text from this file. It may be image-based or empty.');
+  }
+
+  const truncated = text.length > MAX_TEXT_FOR_AI;
+  const textForAI = truncated ? text.slice(0, MAX_TEXT_FOR_AI) : text;
+
+  const userPrompt = question
+    ? `${question}\n\n[Document: ${name}]\n${textForAI}`
+    : `Analyze this document and give me a clear summary with the most important numbers, insights, and anything I should pay attention to.\n\n[Document: ${name}]\n${textForAI}`;
+
+  const metaParts = [`File: ${name}`, `Type: ${fileType}`];
+  if (metaExtra.pages)  metaParts.push(`Pages: ${metaExtra.pages}`);
+  if (metaExtra.sheets) metaParts.push(`Sheets: ${metaExtra.sheets.join(', ')}`);
+  if (truncated) metaParts.push(`Note: File was large — showing first ${MAX_TEXT_FOR_AI} characters`);
+
+  const aiMessage = await chat({
+    messages: [{ role: 'user', content: userPrompt }],
+    tools: [],
+    tone,
+    connectedServices: [],
+    systemExtra: `The user has shared a file from Google Drive. ${metaParts.join('. ')}. Extract key information, highlight important numbers, flag anything unusual. Be specific — mention exact amounts, dates, names.`,
+  });
+
+  logger.info('Drive file analyzed', { fileId, name, type: fileType, truncated });
+
+  res.json({
+    reply: aiMessage.content,
+    fileMeta: {
+      id:        fileId,
+      name,
+      type:      fileType,
+      truncated,
+      ...metaExtra,
+    },
+  });
+}));
+
+module.exports = router;

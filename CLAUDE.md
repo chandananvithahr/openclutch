@@ -2,34 +2,47 @@
 
 ## Current State (update this after every session)
 
-**Last updated:** 2026-03-25 | **Last commit:** `f4aec96` — 8-phase codebase cleanup
+**Last updated:** 2026-03-25 | **Last commit:** `f4aec96` — 8-phase codebase cleanup (session 8 changes not yet committed)
 
 ### What's Built ✅
-- Backend: Express server, all routes (chat, zerodha, angelone, gmail, calendar, sms, cas, journal, career, health, workflows, onboarding stub)
+- Backend: Express server, all routes (chat, zerodha, angelone, gmail, calendar, sms, cas, journal, career, health, workflows, onboarding)
 - 3-tier memory system (sliding window + LLM summary + GPT facts)
 - 27 AI tools defined + executor routing
 - Workflow engine (DeerFlow2 pattern): emailSync, portfolioSync, healthSync, weeklyReview, smsIngestion
-- Broker adapters: Zerodha ✅, Angel One ✅
+- Broker adapters: Zerodha ✅, Angel One ✅, Upstox ✅, Fyers ✅, Dhan ✅, 5paisa ✅ — ALL 6 brokers done
 - Mobile: ChatScreen, useChat hook, smsParser, healthConnect (Android), healthKit (iOS), unified health.js
+- Mobile onboarding: `OnboardingFlow.js` (10-screen adaptive Cleo-style) + `OnboardingCard.js` (reusable card with haptics/animation) ✅
 - Supabase tables: messages, connected_apps, user_facts, sms_transactions, journal_entries, career_profiles, job_applications, user_profiles, notifications, health_data, memories (pgvector) ✅ — ALL with RLS enabled
+- **Railway deployment: backend is LIVE** — `humble-blessing-production.up.railway.app` ✅
+- Mobile `.env` set to Railway URL ✅
+- File upload + AI analysis: `POST /api/files/analyze` — PDF, Excel, CSV → AI summary ✅
+- Google Drive integration: OAuth2 + file listing + AI analysis (`/api/drive/*`) ✅
 
 ### What's NOT Built Yet ❌
-- ~~Supabase tables~~ ALL tables created ✅
-- Onboarding: `OnboardingFlow.js`, `OnboardingCard.js`, `onboarding.js` route — designed, NOT coded
-- Brokers: Upstox (P0), Fyers (P1), Dhan (P1), 5paisa (P2)
-- Railway deployment
-- Profile data wired into chat.js system prompt
+- ~~Security hardening~~ ALL 5 CRITICAL issues fixed: JWT auth ✅, helmet ✅, global rate limit ✅, OAuth CSRF state ✅, multer validation ✅
+- ~~Profile data wired into chat.js~~ ✅ Done — profile + facts both injected into system prompt
+- Android device test with Railway backend end-to-end
+- Remaining Railway env vars: broker API keys, Google OAuth keys, ALLOWED_ORIGINS
 
-### Uncommitted Changes Sitting in Repo
-- `backend/src/server.js`, `tools/executor.js`, `tools/index.js`, `docs/ARCHITECTURE.md` (modified)
-- `backend/src/routes/calendar.js`, `docs/VISION.md`, `mobile/services/health.js`, `mobile/services/healthKit.js` (new, untracked)
+### Uncommitted Changes Sitting in Repo (session 8)
+- `backend/src/server.js` — added Upstox/Fyers/Dhan/5paisa route imports
+- `backend/src/routes/upstox.js` — NEW (OAuth2 + upstox-js-sdk)
+- `backend/src/routes/fyers.js` — NEW (OAuth2 + fyers-api-v3)
+- `backend/src/routes/dhan.js` — NEW (token auth + dhanhq)
+- `backend/src/routes/fivepaisa.js` — NEW (TOTP + 5paisa-ts-sdk)
+- `backend/src/brokers/index.js` — 4 new adapters added
+- `backend/package.json` — engines field + new broker deps
+- `mobile/components/OnboardingCard.js` — NEW
+- `mobile/screens/OnboardingFlow.js` — NEW
+- `mobile/App.js` — OnboardingFlow import, spinner color
+- `mobile/.env` — Railway URL
+- `mobile/android/gradle.properties` — minSdkVersion 24→26
 
 ### Next Up (in order)
-1. Commit the uncommitted changes above
-2. ~~Run SQL in Supabase~~ ✅ ALL 11 tables created + RLS enabled (2026-03-25)
-3. Build onboarding: `onboarding.js` route → `repositories/index.js` (userProfiles) → `OnboardingFlow.js` → `OnboardingCard.js`
-4. Upstox broker integration (P0)
-5. Deploy to Railway
+1. Commit all changes (session 8 + security fixes + profile injection)
+2. Add `JWT_SECRET` to Railway env vars (same value as local .env)
+3. Full Android device test with Railway backend end-to-end
+4. Add remaining Railway env vars: broker API keys, Google OAuth, ALLOWED_ORIGINS
 
 ## gstack
 
@@ -99,10 +112,10 @@ D:\OPENCLAW CHANDAN\
 │   │   │   ├── chat.js            ← POST /api/chat (tool loop + memory). GET /history. GET /facts
 │   │   │   ├── zerodha.js         ← Zerodha OAuth + token storage. Token expiry → auto-clear.
 │   │   │   ├── angelone.js        ← Angel One SmartAPI TOTP auth. Token expiry → auto-clear.
-│   │   │   ├── upstox.js          ← ⬜ Upstox OAuth2 + token storage (P0)
-│   │   │   ├── fyers.js           ← ⬜ Fyers OAuth2 + token storage (P1)
-│   │   │   ├── dhan.js            ← ⬜ Dhan token auth + holdings (P1)
-│   │   │   ├── fivepaisa.js       ← ⬜ 5paisa OAuth2 + TOTP (P2)
+│   │   │   ├── upstox.js          ← ✅ Upstox OAuth2 + upstox-js-sdk + token storage
+│   │   │   ├── fyers.js           ← ✅ Fyers OAuth2 + fyers-api-v3 + token storage
+│   │   │   ├── dhan.js            ← ✅ Dhan token auth + dhanhq + holdings
+│   │   │   ├── fivepaisa.js       ← ✅ 5paisa TOTP + 5paisa-ts-sdk + token storage
 │   │   │   ├── gmail.js           ← Google OAuth2, fetchEmails(), searchEmails()
 │   │   │   ├── calendar.js        ← Google Calendar OAuth2, schedule, free slots (Kaal agent)
 │   │   │   ├── cas.js             ← POST /api/cas/upload — CASParser MF integration
@@ -219,10 +232,10 @@ User types message
 |---|--------|-----|------|------|--------|----------|
 | 1 | **Zerodha** | KiteConnect | OAuth2 + request_token | Rs 2000/mo | ✅ Built | — |
 | 2 | **Angel One** | SmartAPI | Client ID + TOTP | Free | ✅ Built | — |
-| 3 | **Upstox** | Upstox API v2 | OAuth2 | Free | ⬜ Next | P0 |
-| 4 | **Fyers** | Fyers API v3 | OAuth2 | Free | ⬜ Planned | P1 |
-| 5 | **Dhan** | DhanHQ API | Access Token | Free | ⬜ Planned | P1 |
-| 6 | **5paisa** | 5paisa API | OAuth2 + TOTP | Free | ⬜ Planned | P2 |
+| 3 | **Upstox** | Upstox API v2 | OAuth2 | Free | ✅ Built | — |
+| 4 | **Fyers** | Fyers API v3 | OAuth2 | Free | ✅ Built | — |
+| 5 | **Dhan** | DhanHQ API | Access Token | Free | ✅ Built | — |
+| 6 | **5paisa** | 5paisa API | OAuth2 + TOTP | Free | ✅ Built | — |
 
 ### API Docs & SDKs
 | Broker | API Docs | npm/SDK | Auth Flow |
@@ -501,6 +514,7 @@ FIVEPAISA_USER_KEY=
 FIVEPAISA_ENCRYPTION_KEY=
 CASPARSER_API_KEY=sandbox-with-json-responses
 PORT=3000
+JWT_SECRET=             ← generate with: node -e "require('crypto').randomBytes(32).toString('hex')" | copy to Railway too
 LOG_LEVEL=info
 ALLOWED_ORIGINS=
 SCHEDULER_USER_IDS=   ← comma-separated user IDs to enable background workflow sync

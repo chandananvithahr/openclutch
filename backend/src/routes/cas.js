@@ -18,7 +18,20 @@ function getCasApiKey() {
 let uploadedCasPath = null;
 let uploadedCasName = null;
 
-const upload = multer({ dest: 'uploads/' });
+const MAX_CAS_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB — CAS PDFs are typically < 2 MB
+const ALLOWED_MIME_TYPES = new Set(['application/pdf']);
+
+const upload = multer({
+  dest: 'uploads/',
+  limits: { fileSize: MAX_CAS_SIZE_BYTES },
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_MIME_TYPES.has(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed for CAS upload'));
+    }
+  },
+});
 
 // Load CAS path from DB on startup
 async function loadCasFromDB() {

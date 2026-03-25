@@ -14,6 +14,24 @@ const { rateLimitMiddleware }      = require('../middleware/rateLimit');
 const logger                       = require('../lib/logger');
 const config                       = require('../lib/config');
 
+// Build a compact profile string for the system prompt
+function formatProfile(p) {
+  if (!p) return null;
+  const parts = [];
+  if (p.name)       parts.push(`Name: ${p.name}`);
+  if (p.age)        parts.push(`Age: ${p.age}`);
+  if (p.city)       parts.push(`City: ${p.city}`);
+  if (p.occupation) parts.push(`Occupation: ${p.occupation}`);
+  if (p.annual_ctc) parts.push(`Annual CTC: ₹${(p.annual_ctc / 100000).toFixed(1)}L`);
+  if (p.monthly_emi) parts.push(`Monthly EMI: ₹${p.monthly_emi}`);
+  if (p.savings_methods?.length) parts.push(`Saves via: ${p.savings_methods.join(', ')}`);
+  if (p.domain_priorities?.length) parts.push(`Priorities: ${p.domain_priorities.join(', ')}`);
+  if (p.fitness_active) parts.push('Active fitness tracker connected');
+  const assets = [p.owns_car && 'car', p.owns_bike && 'bike', p.owns_house && 'house'].filter(Boolean);
+  if (assets.length) parts.push(`Assets: ${assets.join(', ')}`);
+  return parts.length ? parts.join('. ') + '.' : null;
+}
+
 // POST /api/chat
 router.post('/', rateLimitMiddleware, asyncHandler(async (req, res) => {
   const { messages, tone = 'pro', userId = 'default_user' } = req.body;
@@ -41,18 +59,32 @@ router.post('/', rateLimitMiddleware, asyncHandler(async (req, res) => {
     windowedMessages = messages;
   }
 
-  // --- TIER 3: Load stored facts and inject as context ---
+  // --- TIER 3: Load stored facts + user profile and inject as context ---
   let facts;
+  let profileSnippet;
   try {
     const latestUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content || '';
-    facts = await loadFacts(userId, latestUserMsg);
+    [facts] = await Promise.all([
+      loadFacts(userId, latestUserMsg),
+    ]);
   } catch (err) {
     logger.warn('Facts load error (non-fatal)', { err: err.message });
     facts = null;
   }
 
-  const messagesWithContext = facts
-    ? [{ role: 'system', content: `[What I know about you]\n${facts}` }, ...windowedMessages]
+  try {
+    const { data: profile } = await repos.userProfiles.getByUserId(userId);
+    profileSnippet = formatProfile(profile);
+  } catch {
+    profileSnippet = null;
+  }
+
+  const contextParts = [];
+  if (profileSnippet) contextParts.push(`[User Profile]\n${profileSnippet}`);
+  if (facts)          contextParts.push(`[What I know about you]\n${facts}`);
+
+  const messagesWithContext = contextParts.length
+    ? [{ role: 'system', content: contextParts.join('\n\n') }, ...windowedMessages]
     : windowedMessages;
 
   // --- Connected services (safe service name list for system prompt) ---

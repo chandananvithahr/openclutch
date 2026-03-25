@@ -3,6 +3,7 @@ const router = express.Router();
 const { google } = require('googleapis');
 const repos = require('../repositories');
 const logger = require('../lib/logger');
+const { generateState, validateState } = require('../lib/oauthState');
 
 const REDIRECT_URI = process.env.CALENDAR_REDIRECT_URI || 'http://127.0.0.1:3000/api/calendar/callback';
 
@@ -34,6 +35,7 @@ router.get('/login', (req, res) => {
     access_type: 'offline',
     scope: ['https://www.googleapis.com/auth/calendar.readonly'],
     prompt: 'consent',
+    state: generateState(),
   });
   if (req.query.json === 'true' || req.headers.accept?.includes('application/json')) {
     return res.json({ loginUrl: url });
@@ -43,7 +45,10 @@ router.get('/login', (req, res) => {
 
 // GET /api/calendar/callback
 router.get('/callback', async (req, res) => {
-  const { code } = req.query;
+  const { code, state } = req.query;
+  if (!validateState(state)) {
+    return res.status(403).send('Invalid or expired OAuth state. Please try connecting again.');
+  }
   if (!code) return res.status(400).send('Missing code');
 
   try {

@@ -9,20 +9,32 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.3",
+    "5paisa-ts-sdk": "^1.0.0",
+    "5paisajs": "^0.0.25",
     "axios": "^1.13.6",
     "cheerio": "^1.2.0",
     "cors": "^2.8.6",
+    "dhanhq": "^1.0.6",
     "dotenv": "^16.6.1",
     "express": "^4.22.1",
+    "fyers-api-v3": "^1.7.0",
     "googleapis": "^171.4.0",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
     "kiteconnect": "^4.0.0",
     "mem0ai": "^2.4.2",
     "multer": "^2.1.1",
     "openai": "^4.104.0",
+    "pdf-parse": "^2.4.5",
     "smartapi-javascript": "^1.0.27",
+    "upstox-js-sdk": "^2.23.0",
+    "xlsx": "^0.18.5",
     "yahoo-finance2": "^3.13.2"
   },
   "devDependencies": {
     "nodemon": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }
