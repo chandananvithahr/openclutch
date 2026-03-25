@@ -17,6 +17,7 @@ const {
   markAllRead,
   unreadCount,
 }                      = require('../workflows/notifications');
+const repos            = require('../repositories');
 const logger           = require('../lib/logger');
 const { asyncHandler, HTTPError } = require('../middleware/errors');
 
@@ -104,6 +105,42 @@ router.post('/notifications/read-all', asyncHandler(async (req, res) => {
 
   await markAllRead(userId);
   res.json({ ok: true });
+}));
+
+// ─── Sunday Briefing ──────────────────────────────────────────────────────────
+
+// GET /api/workflows/briefing/latest — latest Sunday Briefing for this user
+router.get('/briefing/latest', asyncHandler(async (req, res) => {
+  const userId = req.userId;
+
+  const { notifications: notifs } = await repos.notifications.load(userId, 5, false);
+  const briefing = notifs.find(n => n.type === 'sunday_briefing');
+
+  if (!briefing) {
+    return res.json({ available: false, message: 'No Sunday Briefing yet. Trigger one manually or wait for Sunday 9am.' });
+  }
+
+  res.json({
+    available:   true,
+    text:        briefing.message,
+    data:        briefing.data,
+    generatedAt: briefing.created_at,
+    read:        briefing.read,
+    id:          briefing.id,
+  });
+}));
+
+// POST /api/workflows/briefing/generate — generate briefing on demand
+router.post('/briefing/generate', asyncHandler(async (req, res) => {
+  const userId = req.userId;
+
+  logger.info('briefing:generateOnDemand', { userId });
+
+  runWorkflow('weeklyReview', { userId }).catch(err => {
+    logger.error('briefing:generate failed', { userId, err: err.message });
+  });
+
+  res.json({ queued: true, message: 'Generating your Sunday Briefing — check back in 10 seconds.' });
 }));
 
 module.exports = router;
