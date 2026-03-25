@@ -17,8 +17,8 @@
 
 'use strict';
 
-const supabase = require('../lib/supabase');
-const logger   = require('../lib/logger');
+const repos  = require('../repositories');
+const logger = require('../lib/logger');
 
 // In-memory notification cache per user (last N, for fast GET)
 const notificationCache = new Map(); // userId → [notification, ...]
@@ -38,7 +38,7 @@ async function notify(userId, type, message, data = {}, priority = 'normal') {
   };
 
   // Write to Supabase
-  const { error } = await supabase.from('notifications').insert(notification);
+  const { error } = await repos.notifications.insert(notification);
   if (error) {
     logger.error('Failed to save notification', { type, userId, err: error.message });
     return false;
@@ -130,49 +130,22 @@ const notifications = {
 // ─── Load / mark read ────────────────────────────────────────────────────────
 
 async function loadNotifications(userId, limit = 20, unreadOnly = false) {
-  let query = supabase
-    .from('notifications')
-    .select('id, type, message, data, priority, read, created_at')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  if (unreadOnly) query = query.eq('read', false);
-
-  const { data, error } = await query;
-  if (error) return { notifications: [], error: error.message };
-  return { notifications: data || [] };
+  return repos.notifications.load(userId, limit, unreadOnly);
 }
 
 async function markRead(userId, notificationIds) {
-  if (!notificationIds?.length) return;
-  await supabase
-    .from('notifications')
-    .update({ read: true })
-    .eq('user_id', userId)
-    .in('id', notificationIds);
-
-  // Invalidate cache
+  await repos.notifications.markRead(userId, notificationIds);
   notificationCache.delete(userId);
 }
 
 async function markAllRead(userId) {
-  await supabase
-    .from('notifications')
-    .update({ read: true })
-    .eq('user_id', userId)
-    .eq('read', false);
-
+  await repos.notifications.markAllRead(userId);
   notificationCache.delete(userId);
 }
 
 async function unreadCount(userId) {
-  const { count } = await supabase
-    .from('notifications')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .eq('read', false);
-  return count || 0;
+  const { count } = await repos.notifications.unreadCount(userId);
+  return count;
 }
 
 module.exports = {

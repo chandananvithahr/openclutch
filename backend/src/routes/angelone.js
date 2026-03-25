@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const SmartAPI = require('smartapi-javascript');
-const supabase = require('../lib/supabase');
+const repos = require('../repositories');
 const logger = require('../lib/logger');
 
 // In-memory token (loaded from Supabase on startup)
@@ -14,12 +14,7 @@ function createSmartApi() {
 
 // Load token from Supabase on startup
 async function loadTokenFromDB() {
-  const { data } = await supabase
-    .from('connected_apps')
-    .select('access_token')
-    .eq('user_id', 'default_user')
-    .eq('app_name', 'angel_one')
-    .single();
+  const { data } = await repos.connectedApps.loadToken('default_user', 'angel_one');
 
   if (data?.access_token) {
     jwtToken = data.access_token;
@@ -53,14 +48,7 @@ router.post('/connect', async (req, res) => {
     smartApi.setAccessToken(jwtToken);
 
     // Save to Supabase
-    await supabase
-      .from('connected_apps')
-      .upsert({
-        user_id: 'default_user',
-        app_name: 'angel_one',
-        access_token: jwtToken,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,app_name' });
+    await repos.connectedApps.saveToken('default_user', 'angel_one', { accessToken: jwtToken });
 
     res.json({ success: true, message: 'Angel One connected!' });
   } catch (err) {

@@ -59,7 +59,33 @@ module.exports = {
     MAX_JOB_EMAILS: 20,        // Gmail batch size for job email search
     RECENT_TXNS_LIMIT: 20,     // /api/sms/recent default
     APPLICATIONS_LIMIT: 50,    // /api/career/applications default
+    MAX_TXN_AMOUNT: 10_000_000, // ₹1 crore — reject anything above
   },
+
+  // Validation limits
+  VALIDATION: {
+    MAX_JOURNAL_CHARS: 10_000,
+    MAX_STEPS: 200_000,
+    MAX_SLEEP_HOURS: 24,
+    MAX_HEART_RATE: 250,
+    MIN_HEART_RATE: 20,
+    MAX_CALORIES: 20_000,
+    DATE_REGEX: /^\d{4}-\d{2}-\d{2}$/,
+  },
+
+  // Bank email patterns for Gmail transaction sync
+  BANK_EMAIL_QUERY: [
+    'from:(alerts@hdfcbank.com OR net@hdfcbank.com)',
+    'OR from:(alerts@icicibank.com OR customer.care@icicibank.com)',
+    'OR from:(sbi.co.in)',
+    'OR from:(axisbank.com)',
+    'OR from:(alerts@kotak.com)',
+    'OR from:(alerts@indusind.com)',
+    'OR from:(alerts@yesbank.in)',
+    'OR from:(alerts@paytmbank.com)',
+    'newer_than:60d',
+    'subject:(debited OR transaction OR payment OR withdrawal OR spent)',
+  ].join(' '),
 
   // Embeddings (Tier 3 memory)
   EMBED_MODEL: 'text-embedding-3-small',    // 1536 dims, cheap

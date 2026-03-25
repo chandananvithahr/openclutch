@@ -3,10 +3,11 @@
 
 const express = require('express');
 const router = express.Router();
-const supabase = require('../lib/supabase');
+const repos = require('../repositories');
 const { chat } = require('../lib/ai');
 const sms = require('./sms');
 const logger = require('../lib/logger');
+const config = require('../lib/config');
 
 // POST /api/journal/entry — save or update today's journal
 router.post('/entry', async (req, res) => {
@@ -14,6 +15,9 @@ router.post('/entry', async (req, res) => {
 
   if (!content || typeof content !== 'string' || content.trim().length === 0) {
     return res.status(400).json({ error: 'Journal content is required' });
+  }
+  if (content.length > config.VALIDATION.MAX_JOURNAL_CHARS) {
+    return res.status(400).json({ error: `Journal content too long. Max ${config.VALIDATION.MAX_JOURNAL_CHARS} characters.` });
   }
 
   try {
@@ -36,11 +40,7 @@ router.post('/entry', async (req, res) => {
       entry_date: today,
     };
 
-    const { data, error } = await supabase
-      .from('journal_entries')
-      .upsert(entry, { onConflict: 'user_id,entry_date' })
-      .select()
-      .single();
+    const { data, error } = await repos.journalEntries.upsert(entry);
 
     if (error) {
       logger.error('Journal save error:', error.message);
@@ -58,15 +58,10 @@ router.post('/entry', async (req, res) => {
 router.get('/entries', async (req, res) => {
   const { userId = 'default_user', limit = 30 } = req.query;
 
-  const { data, error } = await supabase
-    .from('journal_entries')
-    .select('*')
-    .eq('user_id', userId)
-    .order('entry_date', { ascending: false })
-    .limit(parseInt(limit));
+  const { data, error } = await repos.journalEntries.loadHistory(userId, parseInt(limit));
 
   if (error) return res.status(500).json({ error: error.message });
-  res.json({ entries: data || [] });
+  res.json({ entries: data });
 });
 
 // GET /api/journal/insights — mood-money-health patterns
@@ -76,16 +71,11 @@ router.get('/insights', async (req, res) => {
   const since = new Date();
   since.setDate(since.getDate() - parseInt(days));
 
-  const { data, error } = await supabase
-    .from('journal_entries')
-    .select('mood, energy_level, linked_spending, linked_sleep_hours, tags, entry_date')
-    .eq('user_id', userId)
-    .gte('entry_date', since.toISOString().slice(0, 10))
-    .order('entry_date', { ascending: true });
+  const { data, error } = await repos.journalEntries.loadInsights(userId, since.toISOString().slice(0, 10));
 
   if (error) return res.status(500).json({ error: error.message });
 
-  const entries = data || [];
+  const entries = data;
   if (entries.length === 0) {
     return res.json({ insights: null, message: 'No journal entries yet. Start journaling to see patterns!' });
   }
@@ -97,16 +87,11 @@ router.get('/insights', async (req, res) => {
 router.get('/streak', async (req, res) => {
   const { userId = 'default_user' } = req.query;
 
-  const { data, error } = await supabase
-    .from('journal_entries')
-    .select('entry_date')
-    .eq('user_id', userId)
-    .order('entry_date', { ascending: false })
-    .limit(365);
+  const { data, error } = await repos.journalEntries.loadDates(userId);
 
   if (error) return res.status(500).json({ error: error.message });
 
-  const dates = (data || []).map(d => d.entry_date);
+  const dates = data.map(d => d.entry_date);
   const streak = calculateStreak(dates);
   res.json(streak);
 });
@@ -276,11 +261,7 @@ async function saveJournalEntry(content, userId) {
     entry_date: today,
   };
 
-  const { data, error } = await supabase
-    .from('journal_entries')
-    .upsert(entry, { onConflict: 'user_id,entry_date' })
-    .select()
-    .single();
+  const { data, error } = await repos.journalEntries.upsert(entry);
 
   if (error) return { error: `Failed to save journal: ${error.message}` };
 
@@ -297,16 +278,11 @@ async function getJournalInsights(userId, days = 30) {
   const since = new Date();
   since.setDate(since.getDate() - parseInt(days));
 
-  const { data, error } = await supabase
-    .from('journal_entries')
-    .select('mood, energy_level, linked_spending, linked_sleep_hours, tags, entry_date, content')
-    .eq('user_id', userId)
-    .gte('entry_date', since.toISOString().slice(0, 10))
-    .order('entry_date', { ascending: true });
+  const { data, error } = await repos.journalEntries.loadInsights(userId, since.toISOString().slice(0, 10));
 
   if (error) return { error: error.message };
 
-  const entries = data || [];
+  const entries = data;
   if (entries.length === 0) {
     return { message: 'No journal entries yet. Try saying "I want to journal" or "How was my day" to start!' };
   }
@@ -314,14 +290,9 @@ async function getJournalInsights(userId, days = 30) {
   const insights = buildInsights(entries);
 
   // Get streak
-  const { data: streakData } = await supabase
-    .from('journal_entries')
-    .select('entry_date')
-    .eq('user_id', userId)
-    .order('entry_date', { ascending: false })
-    .limit(365);
+  const { data: streakData } = await repos.journalEntries.loadDates(userId);
 
-  const streak = calculateStreak((streakData || []).map(d => d.entry_date));
+  const streak = calculateStreak(streakData.map(d => d.entry_date));
 
   // Recent entries for context
   const recentEntries = entries.slice(-5).map(e => ({
@@ -347,12 +318,7 @@ async function getDailyCheckIn(userId) {
   const month = today.slice(0, 7);
 
   // Check if already journaled today
-  const { data: todayEntry } = await supabase
-    .from('journal_entries')
-    .select('mood, energy_level')
-    .eq('user_id', userId)
-    .eq('entry_date', today)
-    .single();
+  const { data: todayEntry } = await repos.journalEntries.loadByDate(userId, today);
 
   // Yesterday's spending
   let yesterdaySpending = 0;
@@ -362,14 +328,9 @@ async function getDailyCheckIn(userId) {
   } catch {}
 
   // Streak info
-  const { data: streakData } = await supabase
-    .from('journal_entries')
-    .select('entry_date')
-    .eq('user_id', userId)
-    .order('entry_date', { ascending: false })
-    .limit(365);
+  const { data: streakData } = await repos.journalEntries.loadDates(userId);
 
-  const streak = calculateStreak((streakData || []).map(d => d.entry_date));
+  const streak = calculateStreak(streakData.map(d => d.entry_date));
 
   return {
     already_journaled_today: !!todayEntry,

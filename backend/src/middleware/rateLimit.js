@@ -9,7 +9,9 @@ const windows = new Map(); // userId -> { count, windowStart }
 const { WINDOW_MS, MAX_REQUESTS, CLEANUP_INTERVAL } = config.RATE_LIMIT;
 
 function rateLimitMiddleware(req, res, next) {
-  const userId = req.body?.userId || req.query?.userId || 'anonymous';
+  // Use userId if provided, otherwise fall back to IP to prevent anonymous bucket sharing
+  const userId = req.body?.userId || req.query?.userId
+    || req.ip || req.headers['x-forwarded-for'] || 'anonymous';
   const now = Date.now();
 
   let window = windows.get(userId);

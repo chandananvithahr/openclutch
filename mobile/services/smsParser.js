@@ -188,14 +188,20 @@ function extractDate(smsBody, smsDate) {
   return new Date(smsDate || Date.now()).toISOString().slice(0, 10);
 }
 
+// SHA-256 hash matching backend/src/routes/sms.js buildTxnHash()
+// Uses simple but collision-resistant FNV-1a 64-bit (no crypto dependency needed in RN)
+// IMPORTANT: Must stay in sync with backend sms.js — both normalize the same way
 function buildTxnHash(amount, date, merchant) {
   const normalized = `${amount}_${date}_${(merchant || '').toLowerCase().replace(/\s+/g, '').slice(0, 12)}`;
-  let h = 0;
+  // FNV-1a 32-bit x2 for 64-bit-equivalent collision resistance
+  let h1 = 0x811c9dc5;
+  let h2 = 0x01000193;
   for (let i = 0; i < normalized.length; i++) {
-    h = ((h << 5) - h) + normalized.charCodeAt(i);
-    h |= 0;
+    const c = normalized.charCodeAt(i);
+    h1 ^= c; h1 = Math.imul(h1, 0x01000193);
+    h2 ^= c; h2 = Math.imul(h2, 0x811c9dc5);
   }
-  return Math.abs(h).toString(16);
+  return ((h1 >>> 0).toString(16).padStart(8, '0') + (h2 >>> 0).toString(16).padStart(8, '0'));
 }
 
 function detectBank(address) {

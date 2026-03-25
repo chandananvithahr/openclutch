@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { google } = require('googleapis');
-const supabase = require('../lib/supabase');
+const repos = require('../repositories');
 const logger = require('../lib/logger');
 
 const REDIRECT_URI = process.env.GMAIL_REDIRECT_URI || 'http://127.0.0.1:3000/api/gmail/callback';
@@ -48,12 +48,7 @@ function extractBody(payload) {
 let gmailTokens = null;
 
 async function loadTokensFromDB() {
-  const { data } = await supabase
-    .from('connected_apps')
-    .select('access_token')
-    .eq('user_id', 'default_user')
-    .eq('app_name', 'gmail')
-    .single();
+  const { data } = await repos.connectedApps.loadToken('default_user', 'gmail');
 
   if (data?.access_token) {
     gmailTokens = JSON.parse(data.access_token);
@@ -89,14 +84,9 @@ router.get('/callback', async (req, res) => {
     gmailTokens = tokens;
 
     // Save to Supabase
-    await supabase
-      .from('connected_apps')
-      .upsert({
-        user_id: 'default_user',
-        app_name: 'gmail',
-        access_token: JSON.stringify(tokens),
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,app_name' });
+    await repos.connectedApps.saveToken('default_user', 'gmail', {
+      accessToken: JSON.stringify(tokens),
+    });
 
     res.send(`
       <html><body style="font-family:sans-serif;text-align:center;padding:40px">
@@ -124,11 +114,9 @@ function getAuthenticatedClient() {
 
   oauth2Client.on('tokens', async (tokens) => {
     gmailTokens = { ...gmailTokens, ...tokens };
-    await supabase
-      .from('connected_apps')
-      .update({ access_token: JSON.stringify(gmailTokens), updated_at: new Date().toISOString() })
-      .eq('user_id', 'default_user')
-      .eq('app_name', 'gmail');
+    await repos.connectedApps.saveToken('default_user', 'gmail', {
+      accessToken: JSON.stringify(gmailTokens),
+    });
   });
 
   return oauth2Client;

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { KiteConnect } = require('kiteconnect');
-const supabase = require('../lib/supabase');
+const repos = require('../repositories');
 const logger = require('../lib/logger');
 
 const kite = new KiteConnect({
@@ -12,12 +12,7 @@ const kite = new KiteConnect({
 let accessToken = null;
 
 async function loadTokenFromDB() {
-  const { data } = await supabase
-    .from('connected_apps')
-    .select('access_token')
-    .eq('user_id', 'default_user')
-    .eq('app_name', 'zerodha')
-    .single();
+  const { data } = await repos.connectedApps.loadToken('default_user', 'zerodha');
 
   if (data?.access_token) {
     accessToken = data.access_token;
@@ -56,14 +51,7 @@ router.get('/callback', async (req, res) => {
     kite.setAccessToken(accessToken);
 
     // Save to Supabase (upsert so re-login updates existing row)
-    await supabase
-      .from('connected_apps')
-      .upsert({
-        user_id: 'default_user',
-        app_name: 'zerodha',
-        access_token: accessToken,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,app_name' });
+    await repos.connectedApps.saveToken('default_user', 'zerodha', { accessToken });
 
     res.send(`
       <html><body style="font-family:sans-serif;text-align:center;padding:40px">

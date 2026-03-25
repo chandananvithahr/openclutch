@@ -4,7 +4,7 @@ const multer = require('multer');
 const axios = require('axios');
 const FormData = require('form-data');
 const fs = require('fs');
-const supabase = require('../lib/supabase');
+const repos = require('../repositories');
 const logger = require('../lib/logger');
 
 // Use production key if available, otherwise sandbox
@@ -22,12 +22,7 @@ const upload = multer({ dest: 'uploads/' });
 
 // Load CAS path from DB on startup
 async function loadCasFromDB() {
-  const { data } = await supabase
-    .from('connected_apps')
-    .select('access_token')
-    .eq('user_id', 'default_user')
-    .eq('app_name', 'cas')
-    .single();
+  const { data } = await repos.connectedApps.loadToken('default_user', 'cas');
 
   if (data?.access_token) {
     const meta = JSON.parse(data.access_token);
@@ -51,14 +46,9 @@ router.post('/upload', upload.single('pdf'), async (req, res) => {
   uploadedCasName = req.file.originalname;
 
   // Persist to Supabase so path survives server restarts
-  await supabase
-    .from('connected_apps')
-    .upsert({
-      user_id: 'default_user',
-      app_name: 'cas',
-      access_token: JSON.stringify({ path: uploadedCasPath, filename: uploadedCasName }),
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,app_name' });
+  await repos.connectedApps.saveMeta('default_user', 'cas', {
+    path: uploadedCasPath, filename: uploadedCasName,
+  });
 
   res.json({ success: true, message: 'CAS PDF uploaded. Now ask Clutch to show your mutual funds.' });
 });
@@ -94,11 +84,7 @@ router.get('/clear', async (req, res) => {
   uploadedCasPath = null;
   uploadedCasName = null;
 
-  await supabase
-    .from('connected_apps')
-    .delete()
-    .eq('user_id', 'default_user')
-    .eq('app_name', 'cas');
+  await repos.connectedApps.deleteToken('default_user', 'cas');
 
   res.json({ success: true });
 });

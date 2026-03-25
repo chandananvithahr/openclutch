@@ -253,4 +253,203 @@ const healthData = {
   },
 };
 
-module.exports = { messages, userFacts, transactions, connectedApps, healthData };
+// ─── Journal Entries (Chitta Agent) ──────────────────────────────────────────
+
+const journalEntries = {
+  async upsert(entry) {
+    const { data, error } = await supabase
+      .from('journal_entries')
+      .upsert(entry, { onConflict: 'user_id,entry_date' })
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  async loadHistory(userId, limit = 30) {
+    const { data, error } = await supabase
+      .from('journal_entries')
+      .select('*')
+      .eq('user_id', userId)
+      .order('entry_date', { ascending: false })
+      .limit(limit);
+    return { data: data || [], error };
+  },
+
+  async loadInsights(userId, sinceDate) {
+    const { data, error } = await supabase
+      .from('journal_entries')
+      .select('mood, energy_level, linked_spending, linked_sleep_hours, tags, entry_date, content')
+      .eq('user_id', userId)
+      .gte('entry_date', sinceDate)
+      .order('entry_date', { ascending: true });
+    return { data: data || [], error };
+  },
+
+  async loadDates(userId, limit = 365) {
+    const { data, error } = await supabase
+      .from('journal_entries')
+      .select('entry_date')
+      .eq('user_id', userId)
+      .order('entry_date', { ascending: false })
+      .limit(limit);
+    return { data: data || [], error };
+  },
+
+  async loadByDate(userId, entryDate) {
+    const { data, error } = await supabase
+      .from('journal_entries')
+      .select('mood, energy_level')
+      .eq('user_id', userId)
+      .eq('entry_date', entryDate)
+      .single();
+    return { data, error };
+  },
+};
+
+// ─── Career Profiles (Karma Agent) ──────────────────────────────────────────
+
+const careerProfiles = {
+  async upsert(profile) {
+    const { error } = await supabase
+      .from('career_profiles')
+      .upsert(profile, { onConflict: 'user_id' });
+    return { error };
+  },
+
+  async load(userId) {
+    const { data, error } = await supabase
+      .from('career_profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+    return { data, error };
+  },
+
+  async loadFields(userId, fields) {
+    const { data, error } = await supabase
+      .from('career_profiles')
+      .select(fields)
+      .eq('user_id', userId)
+      .single();
+    return { data, error };
+  },
+};
+
+// ─── Job Applications (Karma Agent) ─────────────────────────────────────────
+
+const jobApplications = {
+  async upsert(application) {
+    const { data, error } = await supabase
+      .from('job_applications')
+      .upsert(application, { onConflict: 'user_id,company,role' })
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  async loadAll(userId, limit = 50) {
+    const { data, error } = await supabase
+      .from('job_applications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('applied_date', { ascending: false })
+      .limit(limit);
+    return { data: data || [], error };
+  },
+
+  async loadStatuses(userId) {
+    const { data, error } = await supabase
+      .from('job_applications')
+      .select('status')
+      .eq('user_id', userId);
+    return { data: data || [], error };
+  },
+};
+
+// ─── Notifications ──────────────────────────────────────────────────────────
+
+const notificationsRepo = {
+  async insert(notification) {
+    const { error } = await supabase.from('notifications').insert(notification);
+    return { error };
+  },
+
+  async load(userId, limit = 20, unreadOnly = false) {
+    let query = supabase
+      .from('notifications')
+      .select('id, type, message, data, priority, read, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (unreadOnly) query = query.eq('read', false);
+    const { data, error } = await query;
+    return { notifications: data || [], error };
+  },
+
+  async markRead(userId, notificationIds) {
+    if (!notificationIds?.length) return { error: null };
+    const { error } = await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', userId)
+      .in('id', notificationIds);
+    return { error };
+  },
+
+  async markAllRead(userId) {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', userId)
+      .eq('read', false);
+    return { error };
+  },
+
+  async unreadCount(userId) {
+    const { count, error } = await supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('read', false);
+    return { count: count || 0, error };
+  },
+};
+
+// ─── Memories (Vector / pgvector) ───────────────────────────────────────────
+
+const memories = {
+  async tableExists() {
+    const { error } = await supabase.from('memories').select('id').limit(1);
+    return !error;
+  },
+
+  async upsert(row) {
+    const { error } = await supabase.from('memories').upsert(row, {
+      onConflict: 'user_id,metadata->key',
+    });
+    return { error };
+  },
+
+  async search(queryEmbedding, userId, matchCount, threshold) {
+    const { data, error } = await supabase.rpc('match_memories', {
+      query_embedding: queryEmbedding,
+      match_user_id:   userId,
+      match_count:     matchCount,
+      match_threshold: threshold,
+    });
+    return { data: data || [], error };
+  },
+};
+
+module.exports = {
+  messages,
+  userFacts,
+  transactions,
+  connectedApps,
+  healthData,
+  journalEntries,
+  careerProfiles,
+  jobApplications,
+  notifications: notificationsRepo,
+  memories,
+};

@@ -14,7 +14,6 @@ const OpenAI  = require('openai');
 const repos   = require('../repositories');
 const config  = require('../lib/config');
 const logger  = require('../lib/logger');
-const supabase = require('../lib/supabase');
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -98,8 +97,7 @@ If no new concrete facts, return empty array.`,
 // ─── Check if memories table exists ──────────────────────────────────────────
 
 async function memoriesTableExists() {
-  const { error } = await supabase.from('memories').select('id').limit(1);
-  return !error;
+  return repos.memories.tableExists();
 }
 
 // ─── Store facts as vectors in memories table ─────────────────────────────────
@@ -107,13 +105,13 @@ async function memoriesTableExists() {
 async function storeInVectors(userId, facts) {
   for (const fact of facts) {
     const embedding = await embed(fact.context);
-    const { error } = await supabase.from('memories').upsert({
+    const { error } = await repos.memories.upsert({
       user_id:   userId,
       content:   fact.context,
       embedding: JSON.stringify(embedding),
       metadata:  { category: fact.category, key: fact.key, value: fact.value },
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,metadata->key' });
+    });
 
     if (error) logger.warn('Failed to upsert memory vector', { key: fact.key, err: error.message });
   }
@@ -153,16 +151,13 @@ async function loadFacts(userId, queryText) {
     if (useVectors && queryText) {
       // Vector similarity search
       const queryEmbedding = await embed(queryText);
-      const { data, error } = await supabase.rpc('match_memories', {
-        query_embedding: queryEmbedding,
-        match_user_id:   userId,
-        match_count:     TOP_K,
-        match_threshold: SIMILARITY_THRESHOLD,
-      });
+      const { data, error } = await repos.memories.search(
+        queryEmbedding, userId, TOP_K, SIMILARITY_THRESHOLD
+      );
 
       if (error) {
         logger.warn('Vector search failed, falling back', { err: error.message });
-      } else if (data && data.length > 0) {
+      } else if (data.length > 0) {
         return data.map(m => `• ${m.content}`).join('\n');
       }
     }

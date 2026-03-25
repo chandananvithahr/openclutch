@@ -3,7 +3,10 @@
 
 const express = require('express');
 const router = express.Router();
-const supabase = require('../lib/supabase');
+const repos = require('../repositories');
+const config = require('../lib/config');
+
+const V = config.VALIDATION;
 
 // POST /api/health/sync — mobile sends daily health data
 router.post('/sync', async (req, res) => {
@@ -11,6 +14,20 @@ router.post('/sync', async (req, res) => {
 
   if (!data || !data.entry_date) {
     return res.status(400).json({ error: 'Health data with entry_date required' });
+  }
+
+  if (!V.DATE_REGEX.test(data.entry_date)) {
+    return res.status(400).json({ error: 'entry_date must be YYYY-MM-DD format' });
+  }
+
+  if (data.steps != null && (data.steps < 0 || data.steps > V.MAX_STEPS)) {
+    return res.status(400).json({ error: `steps must be 0-${V.MAX_STEPS}` });
+  }
+  if (data.sleep_hours != null && (data.sleep_hours < 0 || data.sleep_hours > V.MAX_SLEEP_HOURS)) {
+    return res.status(400).json({ error: `sleep_hours must be 0-${V.MAX_SLEEP_HOURS}` });
+  }
+  if (data.heart_rate_avg != null && (data.heart_rate_avg < V.MIN_HEART_RATE || data.heart_rate_avg > V.MAX_HEART_RATE)) {
+    return res.status(400).json({ error: `heart_rate_avg must be ${V.MIN_HEART_RATE}-${V.MAX_HEART_RATE}` });
   }
 
   const row = {
@@ -27,9 +44,7 @@ router.post('/sync', async (req, res) => {
     source: data.source || 'health_connect',
   };
 
-  const { error } = await supabase
-    .from('health_data')
-    .upsert(row, { onConflict: 'user_id,entry_date' });
+  const { error } = await repos.healthData.upsert(row);
 
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
@@ -45,12 +60,10 @@ router.get('/summary', async (req, res) => {
 // GET /api/health/status
 router.get('/status', async (req, res) => {
   const { userId = 'default_user' } = req.query;
-  const { count } = await supabase
-    .from('health_data')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId);
+  const recent = await repos.healthData.loadRecent(userId, 1);
+  const hasData = recent.data && recent.data.length > 0;
 
-  res.json({ connected: (count || 0) > 0, data_points: count || 0 });
+  res.json({ connected: hasData, data_points: hasData ? 1 : 0 });
 });
 
 // --- Health Summary ---
@@ -58,12 +71,8 @@ async function getHealthSummary(userId, days = 7) {
   const since = new Date();
   since.setDate(since.getDate() - days);
 
-  const { data, error } = await supabase
-    .from('health_data')
-    .select('*')
-    .eq('user_id', userId)
-    .gte('entry_date', since.toISOString().slice(0, 10))
-    .order('entry_date', { ascending: false });
+  const endDate = new Date().toISOString().slice(0, 10);
+  const { data, error } = await repos.healthData.queryRange(userId, since.toISOString().slice(0, 10), endDate);
 
   if (error) return { error: error.message };
 
@@ -121,23 +130,16 @@ async function getHealthSpendingCorrelation(userId, days = 30) {
   const sinceStr = since.toISOString().slice(0, 10);
 
   // Get health data
-  const { data: healthData } = await supabase
-    .from('health_data')
-    .select('entry_date, steps, sleep_hours, heart_rate_avg')
-    .eq('user_id', userId)
-    .gte('entry_date', sinceStr)
-    .order('entry_date', { ascending: true });
+  const endDate = new Date().toISOString().slice(0, 10);
+  const { data: healthEntries } = await repos.healthData.queryRange(userId, sinceStr, endDate);
 
   // Get spending data
-  const { data: spendingData } = await supabase
-    .from('sms_transactions')
-    .select('amount, category, txn_date')
-    .eq('user_id', userId)
-    .eq('type', 'debit')
-    .gte('txn_date', sinceStr);
+  const { data: spendingEntries } = await repos.transactions.querySpending(userId, {
+    type: 'debit', startDate: sinceStr,
+  });
 
-  const health = healthData || [];
-  const spending = spendingData || [];
+  const health = healthEntries || [];
+  const spending = spendingEntries || [];
 
   if (health.length < 3) {
     return { message: 'Need at least 3 days of health data to find patterns. Keep syncing!' };

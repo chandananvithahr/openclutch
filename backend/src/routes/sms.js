@@ -5,7 +5,6 @@
 
 const express = require('express');
 const router = express.Router();
-const supabase = require('../lib/supabase');
 const repos = require('../repositories');
 const { categorize } = require('../services/categorizer');
 const logger = require('../lib/logger');
@@ -20,7 +19,19 @@ router.post('/transactions', async (req, res) => {
     return res.status(400).json({ error: 'transactions array required' });
   }
 
-  const result = await upsertTransactions(transactions, userId, 'sms');
+  // Validate individual transactions
+  const valid = transactions.filter(t => {
+    if (!t.amount || typeof t.amount !== 'number' || t.amount <= 0) return false;
+    if (t.amount > config.SPENDING.MAX_TXN_AMOUNT) return false;
+    if (!t.date) return false;
+    return true;
+  });
+
+  if (valid.length === 0) {
+    return res.status(400).json({ error: 'No valid transactions in batch' });
+  }
+
+  const result = await upsertTransactions(valid, userId, 'sms');
   res.json(result);
 });
 
@@ -58,14 +69,17 @@ router.get('/status', async (req, res) => {
 // --- Core dedup logic ---
 // Hash is based on content, NOT the raw message body
 // So SMS and email about the same transaction produce the same hash → no double-count
+// Uses FNV-1a dual 32-bit for collision resistance (portable — matches mobile/smsParser.js)
 function buildTxnHash(amount, date, merchant) {
-  const normalized = `${amount}_${date}_${merchant.toLowerCase().replace(/\s+/g, '').slice(0, 12)}`;
-  let h = 0;
+  const normalized = `${amount}_${date}_${(merchant || '').toLowerCase().replace(/\s+/g, '').slice(0, 12)}`;
+  let h1 = 0x811c9dc5;
+  let h2 = 0x01000193;
   for (let i = 0; i < normalized.length; i++) {
-    h = ((h << 5) - h) + normalized.charCodeAt(i);
-    h |= 0;
+    const c = normalized.charCodeAt(i);
+    h1 ^= c; h1 = Math.imul(h1, 0x01000193);
+    h2 ^= c; h2 = Math.imul(h2, 0x811c9dc5);
   }
-  return Math.abs(h).toString(16);
+  return ((h1 >>> 0).toString(16).padStart(8, '0') + (h2 >>> 0).toString(16).padStart(8, '0'));
 }
 
 async function upsertTransactions(transactions, userId, source) {
@@ -113,18 +127,7 @@ async function syncEmailTransactions(userId) {
   }
 
   // Search for bank transaction alert emails from last 60 days
-  const bankEmailQuery = [
-    'from:(alerts@hdfcbank.com OR net@hdfcbank.com)',
-    'OR from:(alerts@icicibank.com OR customer.care@icicibank.com)',
-    'OR from:(sbi.co.in)',
-    'OR from:(axisbank.com)',
-    'OR from:(alerts@kotak.com)',
-    'OR from:(alerts@indusind.com)',
-    'OR from:(alerts@yesbank.in)',
-    'OR from:(alerts@paytmbank.com)',
-    'newer_than:60d',
-    'subject:(debited OR transaction OR payment OR withdrawal OR spent)',
-  ].join(' ');
+  const bankEmailQuery = config.BANK_EMAIL_QUERY;
 
   let emailData;
   try {
@@ -219,22 +222,21 @@ function detectBankFromEmail(from) {
 
 // --- Spending summary ---
 async function getSpendingData(userId, month) {
-  let query = supabase
-    .from('sms_transactions')
-    .select('amount, merchant, category, bank, type, txn_date, source')
-    .eq('user_id', userId)
-    .eq('type', 'debit');
+  let startDate;
+  let endDate;
 
   if (month) {
     const [yr, mo] = month.split('-').map(Number);
-    const nextMo = mo === 12 ? `${yr + 1}-01-01` : `${yr}-${String(mo + 1).padStart(2, '0')}-01`;
-    query = query.gte('txn_date', `${month}-01`).lt('txn_date', nextMo);
+    startDate = `${month}-01`;
+    endDate = mo === 12 ? `${yr + 1}-01-01` : `${yr}-${String(mo + 1).padStart(2, '0')}-01`;
   }
 
-  const { data, error } = await query.order('txn_date', { ascending: false });
+  const { data, error } = await repos.transactions.querySpending(userId, {
+    type: 'debit', startDate, endDate,
+  });
   if (error) return { error: error.message };
 
-  return buildSpendingSummary(data || []);
+  return buildSpendingSummary(data);
 }
 
 function buildSpendingSummary(transactions) {

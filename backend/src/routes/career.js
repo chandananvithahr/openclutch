@@ -5,7 +5,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const fs = require('fs');
-const supabase = require('../lib/supabase');
+const repos = require('../repositories');
 const { chat } = require('../lib/ai');
 const gmail = require('./gmail');
 const logger = require('../lib/logger');
@@ -22,25 +22,24 @@ router.post('/resume', upload.single('pdf'), async (req, res) => {
   try {
     // Read file as text (basic extraction — works for text-based PDFs)
     const fileBuffer = fs.readFileSync(req.file.path);
-    const rawText = fileBuffer.toString('utf-8').replace(/[^\x20-\x7E\n\r]/g, ' ').replace(/\s+/g, ' ').trim();
+    // Keep Unicode letters (Indian names, Devanagari, etc.) — only strip control chars
+    const rawText = fileBuffer.toString('utf-8').replace(/[\x00-\x1F\x7F]/g, ' ').replace(/\s+/g, ' ').trim();
 
     // AI-powered resume parsing
     const parsed = await parseResumeWithAI(rawText);
 
     // Save to DB
-    const { error } = await supabase
-      .from('career_profiles')
-      .upsert({
-        user_id: userId,
-        full_name: parsed.full_name,
-        role_title: parsed.role_title,
-        experience_years: parsed.experience_years,
-        skills: parsed.skills,
-        education: parsed.education,
-        work_history: parsed.work_history,
-        raw_resume_text: rawText.slice(0, 5000),
-        last_updated: new Date().toISOString(),
-      }, { onConflict: 'user_id' });
+    const { error } = await repos.careerProfiles.upsert({
+      user_id: userId,
+      full_name: parsed.full_name,
+      role_title: parsed.role_title,
+      experience_years: parsed.experience_years,
+      skills: parsed.skills,
+      education: parsed.education,
+      work_history: parsed.work_history,
+      raw_resume_text: rawText.slice(0, 5000),
+      last_updated: new Date().toISOString(),
+    });
 
     // Clean up temp file
     fs.unlinkSync(req.file.path);
@@ -56,27 +55,17 @@ router.post('/resume', upload.single('pdf'), async (req, res) => {
 // GET /api/career/profile
 router.get('/profile', async (req, res) => {
   const { userId = 'default_user' } = req.query;
-  const { data, error } = await supabase
-    .from('career_profiles')
-    .select('*')
-    .eq('user_id', userId)
-    .single();
+  const { data } = await repos.careerProfiles.load(userId);
 
-  if (error || !data) return res.json({ profile: null });
-  res.json({ profile: data });
+  res.json({ profile: data || null });
 });
 
 // GET /api/career/applications
 router.get('/applications', async (req, res) => {
   const { userId = 'default_user' } = req.query;
-  const { data } = await supabase
-    .from('job_applications')
-    .select('*')
-    .eq('user_id', userId)
-    .order('applied_date', { ascending: false })
-    .limit(config.SPENDING.APPLICATIONS_LIMIT);
+  const { data } = await repos.jobApplications.loadAll(userId, config.SPENDING.APPLICATIONS_LIMIT);
 
-  res.json({ applications: data || [] });
+  res.json({ applications: data });
 });
 
 // --- AI Resume Parser ---
@@ -125,11 +114,7 @@ If data is unclear, make reasonable inferences. Never return null for required f
 
 async function getCareerAdvice(query, userId) {
   // Load user's profile
-  const { data: profile } = await supabase
-    .from('career_profiles')
-    .select('*')
-    .eq('user_id', userId)
-    .single();
+  const { data: profile } = await repos.careerProfiles.load(userId);
 
   if (!profile) {
     return {
@@ -205,11 +190,7 @@ function detectJobEmailType(subject, from) {
 }
 
 async function getInterviewPrep(company, role, userId) {
-  const { data: profile } = await supabase
-    .from('career_profiles')
-    .select('skills, experience_years, work_history')
-    .eq('user_id', userId)
-    .single();
+  const { data: profile } = await repos.careerProfiles.loadFields(userId, 'skills, experience_years, work_history');
 
   return {
     company,
@@ -241,25 +222,18 @@ Provide:
 }
 
 async function trackJobApplication(company, role, status, userId) {
-  const { data, error } = await supabase
-    .from('job_applications')
-    .upsert({
-      user_id: userId,
-      company,
-      role,
-      status: status || 'applied',
-      applied_date: new Date().toISOString().slice(0, 10),
-    }, { onConflict: 'user_id,company,role' })
-    .select()
-    .single();
+  const { data, error } = await repos.jobApplications.upsert({
+    user_id: userId,
+    company,
+    role,
+    status: status || 'applied',
+    applied_date: new Date().toISOString().slice(0, 10),
+  });
 
   if (error) return { error: error.message };
 
   // Get all apps for stats
-  const { data: allApps } = await supabase
-    .from('job_applications')
-    .select('status')
-    .eq('user_id', userId);
+  const { data: allApps } = await repos.jobApplications.loadStatuses(userId);
 
   const stats = {};
   for (const app of (allApps || [])) {
@@ -315,11 +289,9 @@ function parseScoreResponse(text) {
 }
 
 async function scoreJobFit(jobDescription, userId) {
-  const { data: profile } = await supabase
-    .from('career_profiles')
-    .select('role_title, experience_years, skills, work_history, raw_resume_text')
-    .eq('user_id', userId)
-    .single();
+  const { data: profile } = await repos.careerProfiles.loadFields(
+    userId, 'role_title, experience_years, skills, work_history, raw_resume_text'
+  );
 
   if (!profile) {
     return { error: 'No resume uploaded. Upload resume first.' };

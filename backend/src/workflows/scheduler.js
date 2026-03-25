@@ -35,9 +35,10 @@ function isMarketHours() {
   return t >= 9 * 60 && t <= 15 * 60 + 30;
 }
 
+// Only fires in the first minute of 09:00 IST to avoid re-triggering every check
 function isSundayMorning() {
   const ist = nowIST();
-  return ist.getDay() === 0 && ist.getHours() === 9;
+  return ist.getDay() === 0 && ist.getHours() === 9 && ist.getMinutes() < 5;
 }
 
 // ─── Interval references (for clean shutdown) ─────────────────────────────────
