@@ -3,7 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS journal_entries (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id TEXT NOT NULL DEFAULT 'default_user',
+  user_id TEXT NOT NULL,
   content TEXT NOT NULL,
   mood TEXT,  -- happy, stressed, anxious, motivated, tired, neutral, sad, excited
   energy_level INTEGER CHECK (energy_level BETWEEN 1 AND 5),

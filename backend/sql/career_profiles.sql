@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS career_profiles (
 
 CREATE TABLE IF NOT EXISTS job_applications (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id TEXT NOT NULL DEFAULT 'default_user',
+  user_id TEXT NOT NULL,
   company TEXT NOT NULL,
   role TEXT NOT NULL,
   status TEXT DEFAULT 'applied',  -- applied, replied, interview, offer, rejected

@@ -143,7 +143,7 @@ CREATE INDEX IF NOT EXISTS idx_sms_category ON sms_transactions (user_id, catego
 CREATE INDEX IF NOT EXISTS idx_messages_user_ts ON messages (user_id, created_at DESC);
 
 -- user_facts: fact lookup
-CREATE INDEX IF NOT EXISTS idx_facts_user_key ON user_facts (user_id, fact_key);
+CREATE INDEX IF NOT EXISTS idx_facts_user_key ON user_facts (user_id, key);
 
 -- connected_apps: token lookup on every request
 CREATE INDEX IF NOT EXISTS idx_apps_user_name ON connected_apps (user_id, app_name);

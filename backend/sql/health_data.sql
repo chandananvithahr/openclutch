@@ -3,7 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS health_data (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id TEXT NOT NULL DEFAULT 'default_user',
+  user_id TEXT NOT NULL,
   entry_date DATE NOT NULL,
   steps INTEGER,
   sleep_hours NUMERIC(4,1),
