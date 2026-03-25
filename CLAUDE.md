@@ -11,10 +11,10 @@
 - Workflow engine (DeerFlow2 pattern): emailSync, portfolioSync, healthSync, weeklyReview, smsIngestion
 - Broker adapters: Zerodha ✅, Angel One ✅
 - Mobile: ChatScreen, useChat hook, smsParser, healthConnect (Android), healthKit (iOS), unified health.js
-- Supabase tables: messages, connected_apps, user_facts, sms_transactions ✅
+- Supabase tables: messages, connected_apps, user_facts, sms_transactions, journal_entries, career_profiles, job_applications, user_profiles, notifications, health_data, memories (pgvector) ✅ — ALL with RLS enabled
 
 ### What's NOT Built Yet ❌
-- Supabase tables: `user_profiles`, `notifications`, `journal_entries`, `career_profiles`, `health_data` — SQL files exist, NOT run yet
+- ~~Supabase tables~~ ALL tables created ✅
 - Onboarding: `OnboardingFlow.js`, `OnboardingCard.js`, `onboarding.js` route — designed, NOT coded
 - Brokers: Upstox (P0), Fyers (P1), Dhan (P1), 5paisa (P2)
 - Railway deployment
@@ -26,8 +26,8 @@
 
 ### Next Up (in order)
 1. Commit the uncommitted changes above
-2. Run SQL in Supabase: `notifications.sql` → `health_data.sql` → `journal_entries.sql` → `career_profiles.sql` → `indexes_and_rls.sql`
-3. Build onboarding: `user_profiles.sql` → `onboarding.js` route → `repositories/index.js` (userProfiles) → `OnboardingFlow.js` → `OnboardingCard.js`
+2. ~~Run SQL in Supabase~~ ✅ ALL 11 tables created + RLS enabled (2026-03-25)
+3. Build onboarding: `onboarding.js` route → `repositories/index.js` (userProfiles) → `OnboardingFlow.js` → `OnboardingCard.js`
 4. Upstox broker integration (P0)
 5. Deploy to Railway
 

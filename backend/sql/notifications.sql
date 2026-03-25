@@ -21,16 +21,15 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_read
 CREATE INDEX IF NOT EXISTS idx_notifications_created
   ON notifications (created_at);
 
--- Row-level security: users can only see their own notifications
+-- RLS: users can only see their own notifications
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
+DO $$ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_policies
     WHERE tablename = 'notifications' AND policyname = 'notifications_user_isolation'
   ) THEN
     CREATE POLICY notifications_user_isolation ON notifications
-      USING (user_id = auth.uid()::text);
+      FOR ALL USING (user_id = auth.uid()::text);
   END IF;
 END $$;

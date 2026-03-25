@@ -29,3 +29,25 @@ CREATE TABLE IF NOT EXISTS job_applications (
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_user ON job_applications(user_id, applied_date DESC);
+
+-- RLS: users can only access their own career data
+ALTER TABLE career_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE job_applications ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'career_profiles' AND policyname = 'career_user_isolation'
+  ) THEN
+    CREATE POLICY career_user_isolation ON career_profiles
+      FOR ALL USING (user_id = auth.uid()::text);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'job_applications' AND policyname = 'jobs_user_isolation'
+  ) THEN
+    CREATE POLICY jobs_user_isolation ON job_applications
+      FOR ALL USING (user_id = auth.uid()::text);
+  END IF;
+END $$;

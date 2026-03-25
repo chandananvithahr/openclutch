@@ -14,8 +14,17 @@ CREATE TABLE IF NOT EXISTS journal_entries (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Index for fast lookups by user + date
 CREATE INDEX IF NOT EXISTS idx_journal_user_date ON journal_entries(user_id, entry_date DESC);
-
--- Unique constraint: one journal entry per user per day (upsert pattern)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_journal_user_day ON journal_entries(user_id, entry_date);
+
+-- RLS: users can only access their own journal entries
+ALTER TABLE journal_entries ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'journal_entries' AND policyname = 'journal_user_isolation'
+  ) THEN
+    CREATE POLICY journal_user_isolation ON journal_entries
+      FOR ALL USING (user_id = auth.uid()::text);
+  END IF;
+END $$;
