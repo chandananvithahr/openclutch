@@ -14,9 +14,8 @@ function getCasApiKey() {
     : process.env.CASPARSER_API_KEY;
 }
 
-// CAS file path persisted in Supabase connected_apps table — survives server restarts
-let uploadedCasPath = null;
-let uploadedCasName = null;
+// Per-user CAS file cache — keyed by userId → { path, filename }
+const casFileCache = new Map();
 
 const MAX_CAS_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB — CAS PDFs are typically < 2 MB
 const ALLOWED_MIME_TYPES = new Set(['application/pdf']);
@@ -33,21 +32,18 @@ const upload = multer({
   },
 });
 
-// Load CAS path from DB on startup
-async function loadCasFromDB() {
-  const { data } = await repos.connectedApps.loadToken('default_user', 'cas');
+// Load CAS path from DB for a given user (lazy — called on demand)
+async function loadCasFromDB(userId) {
+  const { data } = await repos.connectedApps.loadToken(userId, 'cas');
 
   if (data?.access_token) {
     const meta = JSON.parse(data.access_token);
     if (meta.path && fs.existsSync(meta.path)) {
-      uploadedCasPath = meta.path;
-      uploadedCasName = meta.filename;
-      logger.info('CAS file path loaded from Supabase:', uploadedCasName);
+      casFileCache.set(userId, { path: meta.path, filename: meta.filename });
+      logger.info('CAS file path loaded from Supabase', { userId, filename: meta.filename });
     }
   }
 }
-
-loadCasFromDB().catch(err => logger.error('Failed to load CAS from DB', { err: err.message }));
 
 // POST /api/cas/upload
 // Mobile sends PDF file, we store path and persist to Supabase
@@ -55,12 +51,13 @@ router.post('/upload', upload.single('pdf'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No PDF file uploaded' });
   }
-  uploadedCasPath = req.file.path;
-  uploadedCasName = req.file.originalname;
+
+  const userId = req.userId;
+  casFileCache.set(userId, { path: req.file.path, filename: req.file.originalname });
 
   // Persist to Supabase so path survives server restarts
-  await repos.connectedApps.saveMeta('default_user', 'cas', {
-    path: uploadedCasPath, filename: uploadedCasName,
+  await repos.connectedApps.saveMeta(userId, 'cas', {
+    path: req.file.path, filename: req.file.originalname,
   });
 
   res.json({ success: true, message: 'CAS PDF uploaded. Now ask Clutch to show your mutual funds.' });
@@ -68,6 +65,12 @@ router.post('/upload', upload.single('pdf'), async (req, res) => {
 
 // GET /api/cas/status
 router.get('/status', async (req, res) => {
+  const userId = req.userId;
+  if (!casFileCache.has(userId)) {
+    await loadCasFromDB(userId).catch(() => {});
+  }
+
+  const userCas = casFileCache.get(userId);
   const apiKey = getCasApiKey();
   const isSandbox = apiKey?.startsWith('sandbox') || false;
   const isProduction = apiKey && !isSandbox;
@@ -81,8 +84,8 @@ router.get('/status', async (req, res) => {
   } catch {}
 
   res.json({
-    uploaded: !!uploadedCasPath,
-    filename: uploadedCasName || null,
+    uploaded: !!userCas,
+    filename: userCas?.filename || null,
     api_mode: isProduction ? 'production' : isSandbox ? 'sandbox' : 'none',
     local_parser: localParserRunning ? 'running' : 'stopped',
     fallback_available: localParserRunning,
@@ -91,28 +94,28 @@ router.get('/status', async (req, res) => {
 
 // GET /api/cas/clear
 router.get('/clear', async (req, res) => {
-  if (uploadedCasPath && fs.existsSync(uploadedCasPath)) {
-    fs.unlinkSync(uploadedCasPath);
-  }
-  uploadedCasPath = null;
-  uploadedCasName = null;
+  const userId = req.userId;
+  const userCas = casFileCache.get(userId);
 
-  await repos.connectedApps.deleteToken('default_user', 'cas');
+  if (userCas?.path && fs.existsSync(userCas.path)) {
+    fs.unlinkSync(userCas.path);
+  }
+  casFileCache.delete(userId);
+
+  await repos.connectedApps.deleteToken(userId, 'cas');
 
   res.json({ success: true });
 });
 
-function getUploadedCasPath() { return uploadedCasPath; }
-
 // --- CASParserHQ API (primary) ---
-async function parseCasAPI(password) {
+async function parseCasAPI(casPath, password) {
   const apiKey = getCasApiKey();
   if (!apiKey) {
     throw new Error('No CASParser API key configured (neither production nor sandbox)');
   }
 
   const form = new FormData();
-  form.append('pdf_file', fs.createReadStream(uploadedCasPath));
+  form.append('pdf_file', fs.createReadStream(casPath));
   if (password) form.append('password', password);
 
   const isSandbox = apiKey.startsWith('sandbox');
@@ -136,7 +139,7 @@ async function parseCasAPI(password) {
 }
 
 // --- Local Python casparser (fallback) ---
-async function parseCasLocal(password) {
+async function parseCasLocal(casPath, password) {
   const localPort = process.env.CASPARSER_LOCAL_PORT || 3001;
   const localUrl = `http://127.0.0.1:${localPort}`;
 
@@ -148,7 +151,7 @@ async function parseCasLocal(password) {
   }
 
   const form = new FormData();
-  form.append('pdf_file', fs.createReadStream(uploadedCasPath));
+  form.append('pdf_file', fs.createReadStream(casPath));
   if (password) form.append('password', password);
 
   const response = await axios.post(`${localUrl}/parse`, form, {
@@ -191,22 +194,28 @@ function normalizeResponse(data) {
   };
 }
 
-// Core parse function — called by executor
+// Core parse function — called by executor (userId required)
 // Strategy: try CASParserHQ API first, fallback to local Python parser
-async function parseCas(password) {
-  if (!uploadedCasPath) {
+async function parseCas(userId, password) {
+  if (!casFileCache.has(userId)) {
+    await loadCasFromDB(userId).catch(() => {});
+  }
+
+  const userCas = casFileCache.get(userId);
+  if (!userCas) {
     return { error: 'No CAS PDF uploaded. Upload your CAMS or KFintech CAS PDF first.' };
   }
 
+  const casPath = userCas.path;
+
   // Try CASParserHQ API first
   try {
-    const apiData = await parseCasAPI(password);
-    logger.info('[CAS] Parsed via CASParserHQ API');
+    const apiData = await parseCasAPI(casPath, password);
+    logger.info('[CAS] Parsed via CASParserHQ API', { userId });
     return normalizeResponse(apiData);
   } catch (apiErr) {
     const status = apiErr.response?.status;
     const isCreditsExhausted = status === 402;
-    const isDown = !apiErr.response || status >= 500;
     const isAuthFailed = status === 401;
     const isBadPDF = status === 400;
 
@@ -220,8 +229,8 @@ async function parseCas(password) {
 
     // Try local Python parser as fallback
     try {
-      const localData = await parseCasLocal(password);
-      logger.info('[CAS] Parsed via local casparser (fallback)');
+      const localData = await parseCasLocal(casPath, password);
+      logger.info('[CAS] Parsed via local casparser (fallback)', { userId });
       return normalizeResponse(localData);
     } catch (localErr) {
       // Both failed — return the most useful error
@@ -244,6 +253,10 @@ async function parseCas(password) {
       };
     }
   }
+}
+
+function getUploadedCasPath(userId) {
+  return casFileCache.get(userId)?.path || null;
 }
 
 module.exports = router;

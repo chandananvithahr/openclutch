@@ -47,9 +47,10 @@ function calcCompleteness(profile) {
 // POST /api/onboarding/profile
 // Body: profile fields (partial or full — upsert pattern)
 router.post('/profile', asyncHandler(async (req, res) => {
-  const { userId, ...fields } = req.body;
+  const userId = req.userId;
+  const fields = { ...req.body };
+  delete fields.userId; // strip if sent — always use JWT userId
 
-  if (!userId) throw new HTTPError(400, 'userId is required');
   if (!fields.name) throw new HTTPError(400, 'name is required');
 
   const completeness = calcCompleteness(fields);
@@ -71,8 +72,8 @@ router.post('/profile', asyncHandler(async (req, res) => {
 }));
 
 // GET /api/onboarding/profile/:userId
-router.get('/profile/:userId', asyncHandler(async (req, res) => {
-  const { userId } = req.params;
+router.get('/profile', asyncHandler(async (req, res) => {
+  const userId = req.userId;
 
   const { data, error } = await userProfiles.getByUserId(userId);
 
@@ -91,8 +92,8 @@ router.get('/profile/:userId', asyncHandler(async (req, res) => {
 
 // PATCH /api/onboarding/profile/:userId
 // Update specific fields only (e.g., tone change, connect broker nudge dismissed)
-router.patch('/profile/:userId', asyncHandler(async (req, res) => {
-  const { userId } = req.params;
+router.patch('/profile', asyncHandler(async (req, res) => {
+  const userId = req.userId;
   const fields = req.body;
 
   if (!Object.keys(fields).length) throw new HTTPError(400, 'No fields to update');

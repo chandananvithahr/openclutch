@@ -19,7 +19,7 @@ async function executeTool(toolName, toolArgs, userContext) {
   switch (toolName) {
     case 'get_portfolio':
       return await withCache(`portfolio:${userContext.userId}`, TTL.PORTFOLIO,
-        () => brokers.getPortfolio());
+        () => brokers.getPortfolio(userContext.userId));
     case 'get_portfolio_chart':
       return await withCache(`portfolio_chart:${userContext.userId}`, TTL.PORTFOLIO,
         () => getPortfolioChart(userContext));
@@ -33,7 +33,7 @@ async function executeTool(toolName, toolArgs, userContext) {
     case 'get_monthly_spending':
       return await getMonthlySpending(toolArgs.month, userContext);
     case 'get_mutual_funds':
-      return await cas.parseCas(toolArgs.password || '');
+      return await cas.parseCas(userContext.userId, toolArgs.password || '');
     case 'get_financials':
       return await withCache(`financials:${toolArgs.symbol}`, TTL.FINANCIALS,
         () => screener.getFinancials(toolArgs.symbol));
@@ -91,7 +91,7 @@ async function executeTool(toolName, toolArgs, userContext) {
 
 // --- Portfolio 1-Year Chart ---
 async function getPortfolioChart(userContext) {
-  const portfolio = await brokers.getPortfolio();
+  const portfolio = await brokers.getPortfolio(userContext.userId);
   if (portfolio.error) return portfolio;
 
   const holdings = portfolio.holdings;
@@ -180,7 +180,8 @@ async function getStockPrice(symbol) {
 
 // --- Email Search ---
 async function searchEmails(query, count, userContext) {
-  if (!gmail.isConnected()) {
+  const connected = await gmail.isConnected(userContext.userId);
+  if (!connected) {
     return {
       error: 'Gmail not connected',
       action: 'Ask the user to connect Gmail by tapping the Gmail button in the status bar.',
@@ -188,7 +189,7 @@ async function searchEmails(query, count, userContext) {
   }
 
   try {
-    const result = await gmail.searchEmails(query, count);
+    const result = await gmail.searchEmails(userContext.userId, query, count);
     return result;
   } catch (err) {
     return { error: `Failed to search emails: ${err.message}` };
@@ -200,7 +201,8 @@ async function getMonthlySpending(month, userContext) {
   const targetMonth = month || new Date().toISOString().slice(0, 7);
 
   // Auto-sync Gmail bank emails if connected — catches users with different registered numbers
-  if (gmail.isConnected()) {
+  const gmailConnected = await gmail.isConnected(userContext.userId);
+  if (gmailConnected) {
     sms.syncEmailTransactions(userContext.userId).catch(err =>
       logger.error('Email transaction sync error', { err: err.message })
     );
@@ -211,7 +213,7 @@ async function getMonthlySpending(month, userContext) {
 
   if (result.transaction_count === 0) {
     const sources = [];
-    if (gmail.isConnected()) sources.push('Gmail (syncing bank emails)');
+    if (gmailConnected) sources.push('Gmail (syncing bank emails)');
     return {
       error: 'No spending data yet',
       action: `To track expenses automatically: ${sources.length ? sources.join(' + ') + ' is connected and being synced. ' : ''}Allow SMS access in the app to read bank alerts from your registered mobile number.`,
@@ -220,14 +222,15 @@ async function getMonthlySpending(month, userContext) {
 
   return {
     month: targetMonth,
-    data_sources: gmail.isConnected() ? 'SMS + Gmail' : 'SMS only',
+    data_sources: gmailConnected ? 'SMS + Gmail' : 'SMS only',
     ...result,
   };
 }
 
 // --- Emails ---
 async function getEmails(count, userContext) {
-  if (!gmail.isConnected()) {
+  const connected = await gmail.isConnected(userContext.userId);
+  if (!connected) {
     return {
       error: 'Gmail not connected',
       action: 'Ask the user to connect Gmail by tapping the Gmail button in the status bar.',
@@ -235,7 +238,7 @@ async function getEmails(count, userContext) {
   }
 
   try {
-    const result = await gmail.fetchEmails(count);
+    const result = await gmail.fetchEmails(userContext.userId, count);
     return result;
   } catch (err) {
     return { error: `Failed to fetch emails: ${err.message}` };
@@ -369,14 +372,14 @@ async function getNetWorth(userContext) {
   let estimatedBankBalance = 0;
 
   // Stock portfolio
-  const portfolio = await brokers.getPortfolio();
+  const portfolio = await brokers.getPortfolio(userContext.userId);
   if (!portfolio.error) {
     portfolioValue = portfolio.total_value;
   }
 
   // Mutual funds (if CAS uploaded)
   try {
-    const mf = await cas.parseCas();
+    const mf = await cas.parseCas(userContext.userId);
     if (!mf.error) {
       mfValue = mf.total_mf_value;
     }
@@ -415,42 +418,45 @@ async function getNetWorth(userContext) {
 
 // --- Calendar (Kaal Agent) ---
 async function getTodaySchedule(userContext) {
-  if (!calendar.isConnected()) {
+  const connected = await calendar.isConnected(userContext.userId);
+  if (!connected) {
     return {
       error: 'Google Calendar not connected',
       action: 'Ask the user to connect Google Calendar to see their schedule.',
     };
   }
   try {
-    return await calendar.getTodaySchedule();
+    return await calendar.getTodaySchedule(userContext.userId);
   } catch (err) {
     return { error: `Failed to fetch schedule: ${err.message}` };
   }
 }
 
 async function getUpcomingEvents(days, userContext) {
-  if (!calendar.isConnected()) {
+  const connected = await calendar.isConnected(userContext.userId);
+  if (!connected) {
     return {
       error: 'Google Calendar not connected',
       action: 'Ask the user to connect Google Calendar to see upcoming events.',
     };
   }
   try {
-    return await calendar.getUpcomingEvents(days);
+    return await calendar.getUpcomingEvents(userContext.userId, days);
   } catch (err) {
     return { error: `Failed to fetch upcoming events: ${err.message}` };
   }
 }
 
 async function getFreeSlots(userContext) {
-  if (!calendar.isConnected()) {
+  const connected = await calendar.isConnected(userContext.userId);
+  if (!connected) {
     return {
       error: 'Google Calendar not connected',
       action: 'Ask the user to connect Google Calendar to find free slots.',
     };
   }
   try {
-    return await calendar.getFreeSlots();
+    return await calendar.getFreeSlots(userContext.userId);
   } catch (err) {
     return { error: `Failed to find free slots: ${err.message}` };
   }

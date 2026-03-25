@@ -22,31 +22,39 @@ const router = express.Router();
 const UPSTOX_AUTH_URL  = 'https://api.upstox.com/v2/login/authorization/dialog';
 const UPSTOX_TOKEN_URL = 'https://api.upstox.com/v2/login/authorization/token';
 
-// In-memory token — loaded from Supabase on startup so it survives restarts
-let accessToken = null;
+// Per-user token cache
+const tokenCache = new Map();
+const TOKEN_TTL = 30 * 60 * 1000;
 
-// Set token on the SDK singleton so all API calls pick it up automatically
+async function getAccessToken(userId) {
+  if (!userId) return null;
+  const key = `${userId}:upstox`;
+  const cached = tokenCache.get(key);
+  if (cached && Date.now() < cached.expiresAt) return cached.token;
+
+  const { data } = await repos.connectedApps.loadToken(userId, 'upstox');
+  if (data?.access_token) {
+    tokenCache.set(key, { token: data.access_token, expiresAt: Date.now() + TOKEN_TTL });
+    return data.access_token;
+  }
+  return null;
+}
+
+function clearTokenCache(userId) {
+  tokenCache.delete(`${userId}:upstox`);
+}
+
+// Set token on the SDK singleton for the current request
 function setSDKToken(token) {
   const oauth2 = ApiClient.instance.authentications['OAUTH2'];
   oauth2.accessToken = token;
 }
 
-async function loadTokenFromDB() {
-  const { data } = await repos.connectedApps.loadToken('default_user', 'upstox');
-  if (data?.access_token) {
-    accessToken = data.access_token;
-    setSDKToken(accessToken);
-    logger.info('Upstox token loaded from Supabase');
-  }
-}
-
-loadTokenFromDB().catch(err => logger.error('Upstox token load failed', { err: err.message }));
-
 // ── Step 1: Login redirect ──────────────────────────────────────────────────
 
-// GET /api/upstox/login
+// GET /api/upstox/login — requires JWT auth
 router.get('/login', (req, res) => {
-  const state = generateState();
+  const state = generateState(req.userId);
   const params = new URLSearchParams({
     client_id:     process.env.UPSTOX_API_KEY,
     redirect_uri:  process.env.UPSTOX_REDIRECT_URI,
@@ -67,7 +75,8 @@ router.get('/login', (req, res) => {
 // GET /api/upstox/callback?code=XXXX
 router.get('/callback', async (req, res) => {
   const { code, state } = req.query;
-  if (!validateState(state)) {
+  const { valid, userId } = validateState(state);
+  if (!valid || !userId) {
     return res.status(403).send('Invalid or expired OAuth state. Please try connecting again.');
   }
   if (!code) return res.status(400).send('Missing authorization code');
@@ -85,13 +94,14 @@ router.get('/callback', async (req, res) => {
       { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
     );
 
-    accessToken = response.data.access_token;
+    const accessToken = response.data.access_token;
     setSDKToken(accessToken);
 
-    await repos.connectedApps.saveToken('default_user', 'upstox', {
+    await repos.connectedApps.saveToken(userId, 'upstox', {
       accessToken,
       refreshToken: response.data.extended_token || null,
     });
+    tokenCache.set(`${userId}:upstox`, { token: accessToken, expiresAt: Date.now() + TOKEN_TTL });
 
     logger.info('Upstox connected successfully');
 
@@ -113,7 +123,9 @@ router.get('/callback', async (req, res) => {
 
 // GET /api/upstox/portfolio
 router.get('/portfolio', async (req, res) => {
-  if (!accessToken) {
+  const userId = req.userId;
+  const token = await getAccessToken(userId);
+  if (!token) {
     return res.status(401).json({
       error:  'Upstox not connected. Visit /api/upstox/login first.',
       action: 'connect_upstox',
@@ -121,6 +133,7 @@ router.get('/portfolio', async (req, res) => {
   }
 
   try {
+    setSDKToken(token);
     const holdings = await fetchHoldings();
 
     let totalValue    = 0;
@@ -153,8 +166,7 @@ router.get('/portfolio', async (req, res) => {
     });
   } catch (err) {
     if (isTokenExpired(err)) {
-      accessToken = null;
-      setSDKToken('');
+      clearTokenCache(userId);
       return res.status(401).json({ error: 'Upstox session expired. Please reconnect.', reconnect: true });
     }
     logger.error('Upstox portfolio fetch error', { err: err.message });
@@ -164,14 +176,15 @@ router.get('/portfolio', async (req, res) => {
 
 // ── Status / disconnect ─────────────────────────────────────────────────────
 
-router.get('/status', (req, res) => {
-  res.json({ connected: !!accessToken });
+router.get('/status', async (req, res) => {
+  const token = await getAccessToken(req.userId);
+  res.json({ connected: !!token });
 });
 
 router.post('/disconnect', async (req, res) => {
-  accessToken = null;
-  setSDKToken('');
-  await repos.connectedApps.deleteToken('default_user', 'upstox');
+  const userId = req.userId;
+  clearTokenCache(userId);
+  await repos.connectedApps.deleteToken(userId, 'upstox');
   res.json({ success: true });
 });
 
@@ -199,8 +212,6 @@ function isTokenExpired(err) {
   const msg = err?.message || '';
   return msg.includes('UDAPI100011') || msg.includes('Access token') || msg.includes('Unauthorized');
 }
-
-function getAccessToken() { return accessToken; }
 
 module.exports = router;
 module.exports.getAccessToken = getAccessToken;

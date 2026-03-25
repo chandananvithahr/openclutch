@@ -101,7 +101,8 @@ function buildTxnHash(amount, date, merchant) {
 async function checkConnection(state) {
   // Lazy require to avoid circular deps at startup
   const gmail = require('../routes/gmail');
-  if (!gmail.isConnected()) {
+  const connected = await gmail.isConnected(state.userId);
+  if (!connected) {
     return { skipped: true, skipReason: 'Gmail not connected' };
   }
   return { gmailConnected: true };
@@ -130,8 +131,8 @@ async function searchEmails(state) {
   ].join(' ');
 
   const [bankResult, jobResult] = await Promise.allSettled([
-    gmail.searchEmails(bankQuery, config.SPENDING.MAX_EMAIL_BATCH),
-    gmail.searchEmails(jobQuery, config.SPENDING.MAX_JOB_EMAILS),
+    gmail.searchEmails(state.userId, bankQuery, config.SPENDING.MAX_EMAIL_BATCH),
+    gmail.searchEmails(state.userId, jobQuery, config.SPENDING.MAX_JOB_EMAILS),
   ]);
 
   const bankEmails = bankResult.status === 'fulfilled' ? (bankResult.value?.emails || []) : [];

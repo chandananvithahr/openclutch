@@ -10,7 +10,8 @@ const V = config.VALIDATION;
 
 // POST /api/health/sync — mobile sends daily health data
 router.post('/sync', async (req, res) => {
-  const { userId = 'default_user', data } = req.body;
+  const userId = req.userId;
+  const { data } = req.body;
 
   if (!data || !data.entry_date) {
     return res.status(400).json({ error: 'Health data with entry_date required' });
@@ -52,14 +53,15 @@ router.post('/sync', async (req, res) => {
 
 // GET /api/health/summary — recent health overview
 router.get('/summary', async (req, res) => {
-  const { userId = 'default_user', days = 7 } = req.query;
+  const userId = req.userId;
+  const { days = 7 } = req.query;
   const summary = await getHealthSummary(userId, parseInt(days));
   res.json(summary);
 });
 
 // GET /api/health/status
 router.get('/status', async (req, res) => {
-  const { userId = 'default_user' } = req.query;
+  const userId = req.userId;
   const recent = await repos.healthData.loadRecent(userId, 1);
   const hasData = recent.data && recent.data.length > 0;
 

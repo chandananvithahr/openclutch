@@ -21,9 +21,30 @@ const router = express.Router();
 const FIVEPAISA_BASE     = 'https://Openapi.5paisa.com/VendorsAPI/Service1.svc';
 const HOLDINGS_ENDPOINT  = `${FIVEPAISA_BASE}/V4/Holding`;
 
-// In-memory state — loaded from Supabase on startup
-let accessToken = null;
-let clientCode  = null;
+// ── Per-user token cache ────────────────────────────────────────────────────
+
+const tokenCache = new Map();
+const TOKEN_TTL  = 30 * 60 * 1000; // 30 minutes
+
+async function getAccessToken(userId) {
+  if (!userId) return null;
+  const key    = `${userId}:fivepaisa`;
+  const cached = tokenCache.get(key);
+  if (cached && Date.now() < cached.expiresAt) return cached.token;
+
+  const { data } = await repos.connectedApps.loadToken(userId, 'fivepaisa');
+  if (data?.access_token) {
+    tokenCache.set(key, { token: data.access_token, expiresAt: Date.now() + TOKEN_TTL });
+    return data.access_token;
+  }
+  return null;
+}
+
+function clearTokenCache(userId) {
+  tokenCache.delete(`${userId}:fivepaisa`);
+}
+
+// ── SDK factory ─────────────────────────────────────────────────────────────
 
 function makeSdkClient() {
   return new FivePaisaClient({
@@ -36,23 +57,13 @@ function makeSdkClient() {
   });
 }
 
-async function loadTokenFromDB() {
-  const { data } = await repos.connectedApps.loadToken('default_user', 'fivepaisa');
-  if (data?.access_token) {
-    accessToken = data.access_token;
-    clientCode  = data.refresh_token || '';
-    logger.info('5paisa token loaded from Supabase');
-  }
-}
-
-loadTokenFromDB().catch(err => logger.error('5paisa token load failed', { err: err.message }));
-
 // ── Connect ─────────────────────────────────────────────────────────────────
 
 // POST /api/fivepaisa/connect
 // Body: { totp, pin, clientCode }
 // User gets TOTP from their authenticator app + 5paisa PIN
 router.post('/connect', async (req, res) => {
+  const userId = req.userId;
   const { totp, pin, clientCode: code } = req.body;
 
   if (!totp) return res.status(400).json({ error: 'totp is required' });
@@ -74,19 +85,19 @@ router.post('/connect', async (req, res) => {
       return res.status(401).json({ error: '5paisa access token not returned' });
     }
 
-    accessToken = token;
-    clientCode  = code;
-
     // Store clientCode in refresh_token column
-    await repos.connectedApps.saveToken('default_user', 'fivepaisa', {
-      accessToken: token,
+    await repos.connectedApps.saveToken(userId, 'fivepaisa', {
+      accessToken:  token,
       refreshToken: code,
     });
 
-    logger.info('5paisa connected successfully');
+    // Populate cache immediately
+    tokenCache.set(`${userId}:fivepaisa`, { token, expiresAt: Date.now() + TOKEN_TTL });
+
+    logger.info('5paisa connected successfully', { userId });
     res.json({ success: true, message: '5paisa connected!' });
   } catch (err) {
-    logger.error('5paisa connect error', { err: err.message });
+    logger.error('5paisa connect error', { userId, err: err.message });
     res.status(401).json({ error: `5paisa connection failed: ${err.message}` });
   }
 });
@@ -95,7 +106,10 @@ router.post('/connect', async (req, res) => {
 
 // GET /api/fivepaisa/portfolio
 router.get('/portfolio', async (req, res) => {
-  if (!accessToken) {
+  const userId = req.userId;
+  const token  = await getAccessToken(userId);
+
+  if (!token) {
     return res.status(401).json({
       error:  '5paisa not connected. POST /api/fivepaisa/connect with your TOTP and PIN.',
       action: 'connect_fivepaisa',
@@ -103,7 +117,10 @@ router.get('/portfolio', async (req, res) => {
   }
 
   try {
-    const holdings = await fetchHoldings();
+    const { data: appData } = await repos.connectedApps.loadToken(userId, 'fivepaisa');
+    const code = appData?.refresh_token || '';
+
+    const holdings = await fetchHoldings(token, code);
 
     let totalValue    = 0;
     let totalInvested = 0;
@@ -135,31 +152,31 @@ router.get('/portfolio', async (req, res) => {
     });
   } catch (err) {
     if (isTokenExpired(err)) {
-      accessToken = null;
-      clientCode  = null;
+      clearTokenCache(userId);
       return res.status(401).json({ error: '5paisa session expired. Please reconnect.', reconnect: true });
     }
-    logger.error('5paisa portfolio fetch error', { err: err.message });
+    logger.error('5paisa portfolio fetch error', { userId, err: err.message });
     res.status(500).json({ error: err.message });
   }
 });
 
 // ── Status / disconnect ─────────────────────────────────────────────────────
 
-router.get('/status', (req, res) => {
-  res.json({ connected: !!accessToken });
+router.get('/status', async (req, res) => {
+  const token = await getAccessToken(req.userId);
+  res.json({ connected: !!token });
 });
 
 router.post('/disconnect', async (req, res) => {
-  accessToken = null;
-  clientCode  = null;
-  await repos.connectedApps.deleteToken('default_user', 'fivepaisa');
+  const userId = req.userId;
+  clearTokenCache(userId);
+  await repos.connectedApps.deleteToken(userId, 'fivepaisa');
   res.json({ success: true });
 });
 
 // ── Shared helper (used by brokers/index.js adapter) ───────────────────────
 
-async function fetchHoldings() {
+async function fetchHoldings(token, clientCode) {
   const response = await axios.post(
     HOLDINGS_ENDPOINT,
     {
@@ -168,7 +185,7 @@ async function fetchHoldings() {
     },
     {
       headers: {
-        Authorization:  `Bearer ${accessToken}`,
+        Authorization:  `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
     }
@@ -191,8 +208,6 @@ function isTokenExpired(err) {
   const msg    = err?.message || '';
   return status === 401 || msg.includes('token') || msg.includes('Unauthorized');
 }
-
-function getAccessToken() { return accessToken; }
 
 module.exports = router;
 module.exports.getAccessToken = getAccessToken;

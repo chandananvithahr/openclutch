@@ -5,29 +5,41 @@ const repos = require('../repositories');
 const logger = require('../lib/logger');
 const { generateState, validateState } = require('../lib/oauthState');
 
-const kite = new KiteConnect({
-  api_key: process.env.ZERODHA_API_KEY,
-});
+// Per-user token cache — replaces the old single-tenant module-level variable
+const tokenCache = new Map();
+const TOKEN_TTL = 30 * 60 * 1000; // 30 min
 
-// Load token from Supabase on startup so it survives server restarts
-let accessToken = null;
+async function getAccessToken(userId) {
+  if (!userId) return null;
+  const key = `${userId}:zerodha`;
+  const cached = tokenCache.get(key);
+  if (cached && Date.now() < cached.expiresAt) return cached.token;
 
-async function loadTokenFromDB() {
-  const { data } = await repos.connectedApps.loadToken('default_user', 'zerodha');
-
+  const { data } = await repos.connectedApps.loadToken(userId, 'zerodha');
   if (data?.access_token) {
-    accessToken = data.access_token;
-    kite.setAccessToken(accessToken);
-    logger.info('Zerodha token loaded from Supabase');
+    tokenCache.set(key, { token: data.access_token, expiresAt: Date.now() + TOKEN_TTL });
+    return data.access_token;
   }
+  return null;
 }
 
-loadTokenFromDB().catch(err => logger.error('Zerodha token load failed', { err: err.message }));
+function clearTokenCache(userId) {
+  tokenCache.delete(`${userId}:zerodha`);
+}
+
+function createKite(token) {
+  const kite = new KiteConnect({ api_key: process.env.ZERODHA_API_KEY });
+  if (token) kite.setAccessToken(token);
+  return kite;
+}
 
 // Step 1: Generate Zerodha login URL
-// GET /api/zerodha/login — returns JSON for app, redirects for browser
+// GET /api/zerodha/login — requires JWT auth, returns JSON loginUrl
+// Mobile app opens this URL in a browser; userId is stored in OAuth state
 router.get('/login', (req, res) => {
-  const state = generateState();
+  const userId = req.userId;
+  const state = generateState(userId);
+  const kite = createKite();
   const base = kite.getLoginURL();
   const loginUrl = `${base}&state=${state}`;
   if (req.query.json === 'true' || req.headers.accept?.includes('application/json')) {
@@ -41,7 +53,8 @@ router.get('/login', (req, res) => {
 router.get('/callback', async (req, res) => {
   const { request_token, state } = req.query;
 
-  if (!validateState(state)) {
+  const { valid, userId } = validateState(state);
+  if (!valid || !userId) {
     return res.status(403).send('Invalid or expired OAuth state. Please try connecting again.');
   }
   if (!request_token) {
@@ -49,15 +62,16 @@ router.get('/callback', async (req, res) => {
   }
 
   try {
+    const kite = createKite();
     const session = await kite.generateSession(
       request_token,
       process.env.ZERODHA_API_SECRET
     );
-    accessToken = session.access_token;
-    kite.setAccessToken(accessToken);
+    const accessToken = session.access_token;
 
-    // Save to Supabase (upsert so re-login updates existing row)
-    await repos.connectedApps.saveToken('default_user', 'zerodha', { accessToken });
+    // Save to Supabase per-user (upsert so re-login updates existing row)
+    await repos.connectedApps.saveToken(userId, 'zerodha', { accessToken });
+    tokenCache.set(`${userId}:zerodha`, { token: accessToken, expiresAt: Date.now() + TOKEN_TTL });
 
     res.send(`
       <html><body style="font-family:sans-serif;text-align:center;padding:40px">
@@ -75,12 +89,14 @@ router.get('/callback', async (req, res) => {
 
 // GET /api/zerodha/portfolio
 router.get('/portfolio', async (req, res) => {
-  if (!accessToken) {
+  const userId = req.userId;
+  const token = await getAccessToken(userId);
+  if (!token) {
     return res.status(401).json({ error: 'Zerodha not connected. Visit /api/zerodha/login first.' });
   }
 
   try {
-    kite.setAccessToken(accessToken);
+    const kite = createKite(token);
     const [holdings, positions] = await Promise.all([
       kite.getHoldings(),
       kite.getPositions(),
@@ -122,7 +138,7 @@ router.get('/portfolio', async (req, res) => {
     logger.error('Portfolio fetch error:', err.message);
     // Token expired — clear so status returns false and user is prompted to reconnect
     if (err.error_type === 'TokenException' || err.message?.includes('token')) {
-      accessToken = null;
+      clearTokenCache(userId);
       return res.status(401).json({ error: 'Zerodha session expired. Please reconnect.', reconnect: true });
     }
     res.status(500).json({ error: err.message });
@@ -130,13 +146,27 @@ router.get('/portfolio', async (req, res) => {
 });
 
 // GET /api/zerodha/status
-router.get('/status', (req, res) => {
-  res.json({ connected: !!accessToken });
+router.get('/status', async (req, res) => {
+  const token = await getAccessToken(req.userId);
+  res.json({ connected: !!token });
 });
 
-function getAccessToken() { return accessToken; }
-function getKite() { return kite; }
+// Fetch holdings for a specific user — used by brokers/index.js adapter
+async function fetchHoldingsForUser(userId) {
+  const token = await getAccessToken(userId);
+  if (!token) return [];
+  const kite = createKite(token);
+  const raw = await kite.getHoldings();
+  return raw.map(h => ({
+    symbol: h.tradingsymbol,
+    name: h.tradingsymbol,
+    qty: h.quantity,
+    buy_price: h.average_price,
+    current_price: h.last_price,
+    broker: 'Zerodha',
+  }));
+}
 
 module.exports = router;
-module.exports.getKite = getKite;
 module.exports.getAccessToken = getAccessToken;
+module.exports.fetchHoldings = fetchHoldingsForUser;

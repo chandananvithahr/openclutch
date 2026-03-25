@@ -17,7 +17,7 @@ const upload = multer({ dest: 'uploads/' });
 router.post('/resume', upload.single('pdf'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No PDF file uploaded' });
 
-  const { userId = 'default_user' } = req.body;
+  const userId = req.userId;
 
   try {
     // Read file as text (basic extraction — works for text-based PDFs)
@@ -54,7 +54,7 @@ router.post('/resume', upload.single('pdf'), async (req, res) => {
 
 // GET /api/career/profile
 router.get('/profile', async (req, res) => {
-  const { userId = 'default_user' } = req.query;
+  const userId = req.userId;
   const { data } = await repos.careerProfiles.load(userId);
 
   res.json({ profile: data || null });
@@ -62,7 +62,7 @@ router.get('/profile', async (req, res) => {
 
 // GET /api/career/applications
 router.get('/applications', async (req, res) => {
-  const { userId = 'default_user' } = req.query;
+  const userId = req.userId;
   const { data } = await repos.jobApplications.loadAll(userId, config.SPENDING.APPLICATIONS_LIMIT);
 
   res.json({ applications: data });
@@ -138,7 +138,8 @@ async function getCareerAdvice(query, userId) {
 }
 
 async function searchJobEmails(userId) {
-  if (!gmail.isConnected()) {
+  const gmailConnected = await gmail.isConnected(userId);
+  if (!gmailConnected) {
     return { error: 'Gmail not connected. Connect Gmail to find job-related emails.' };
   }
 
@@ -149,7 +150,7 @@ async function searchJobEmails(userId) {
       'from:(naukri.com OR linkedin.com OR indeed.com OR internshala.com OR instahyre.com)',
     ];
 
-    const results = await gmail.searchEmails(jobQueries.join(' OR '), 20);
+    const results = await gmail.searchEmails(userId, jobQueries.join(' OR '), 20);
     if (!results?.emails?.length) {
       return { emails: [], message: 'No job-related emails found in your inbox.' };
     }

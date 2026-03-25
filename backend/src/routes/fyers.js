@@ -18,9 +18,26 @@ const { generateState, validateState } = require('../lib/oauthState');
 
 const router = express.Router();
 
-// In-memory token — loaded from Supabase on startup
-let accessToken = null;
-let fyersClient = null;
+// Per-user token cache
+const tokenCache = new Map();
+const TOKEN_TTL = 30 * 60 * 1000;
+
+async function getAccessToken(userId) {
+  if (!userId) return null;
+  const key = `${userId}:fyers`;
+  const cached = tokenCache.get(key);
+  if (cached && Date.now() < cached.expiresAt) return cached.token;
+  const { data } = await repos.connectedApps.loadToken(userId, 'fyers');
+  if (data?.access_token) {
+    tokenCache.set(key, { token: data.access_token, expiresAt: Date.now() + TOKEN_TTL });
+    return data.access_token;
+  }
+  return null;
+}
+
+function clearTokenCache(userId) {
+  tokenCache.delete(`${userId}:fyers`);
+}
 
 function createClient(token) {
   const fyers = new fyersModel();
@@ -30,22 +47,11 @@ function createClient(token) {
   return fyers;
 }
 
-async function loadTokenFromDB() {
-  const { data } = await repos.connectedApps.loadToken('default_user', 'fyers');
-  if (data?.access_token) {
-    accessToken  = data.access_token;
-    fyersClient  = createClient(accessToken);
-    logger.info('Fyers token loaded from Supabase');
-  }
-}
-
-loadTokenFromDB().catch(err => logger.error('Fyers token load failed', { err: err.message }));
-
 // ── Step 1: Login redirect ──────────────────────────────────────────────────
 
 // GET /api/fyers/login
 router.get('/login', (req, res) => {
-  const state = generateState();
+  const state = generateState(req.userId);
   const fyers = new fyersModel();
   fyers.setAppId(process.env.FYERS_APP_ID);
   fyers.setRedirectUrl(process.env.FYERS_REDIRECT_URI);
@@ -64,7 +70,8 @@ router.get('/login', (req, res) => {
 // GET /api/fyers/callback?auth_code=XXXX&state=sample_state
 router.get('/callback', async (req, res) => {
   const { auth_code, state } = req.query;
-  if (!validateState(state)) {
+  const { valid, userId } = validateState(state);
+  if (!valid || !userId) {
     return res.status(403).send('Invalid or expired OAuth state. Please try connecting again.');
   }
   if (!auth_code) return res.status(400).send('Missing auth_code from Fyers');
@@ -85,12 +92,12 @@ router.get('/callback', async (req, res) => {
       return res.status(401).send('Fyers auth failed — no access token returned');
     }
 
-    accessToken = response.access_token;
-    fyersClient = createClient(accessToken);
+    const token = response.access_token;
+    tokenCache.set(`${userId}:fyers`, { token, expiresAt: Date.now() + TOKEN_TTL });
 
-    await repos.connectedApps.saveToken('default_user', 'fyers', { accessToken });
+    await repos.connectedApps.saveToken(userId, 'fyers', { accessToken: token });
 
-    logger.info('Fyers connected successfully');
+    logger.info('Fyers connected successfully', { userId });
 
     res.send(`
       <html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#2D1B14;color:#F5F0EB">
@@ -110,7 +117,10 @@ router.get('/callback', async (req, res) => {
 
 // GET /api/fyers/portfolio
 router.get('/portfolio', async (req, res) => {
-  if (!accessToken) {
+  const userId = req.userId;
+  const token = await getAccessToken(userId);
+
+  if (!token) {
     return res.status(401).json({
       error:  'Fyers not connected. Visit /api/fyers/login first.',
       action: 'connect_fyers',
@@ -118,7 +128,7 @@ router.get('/portfolio', async (req, res) => {
   }
 
   try {
-    const holdings = await fetchHoldings();
+    const holdings = await fetchHoldings(token);
 
     let totalValue    = 0;
     let totalInvested = 0;
@@ -150,8 +160,7 @@ router.get('/portfolio', async (req, res) => {
     });
   } catch (err) {
     if (isTokenExpired(err)) {
-      accessToken = null;
-      fyersClient = null;
+      clearTokenCache(userId);
       return res.status(401).json({ error: 'Fyers session expired. Please reconnect.', reconnect: true });
     }
     logger.error('Fyers portfolio fetch error', { err: err.message });
@@ -161,20 +170,28 @@ router.get('/portfolio', async (req, res) => {
 
 // ── Status / disconnect ─────────────────────────────────────────────────────
 
-router.get('/status', (req, res) => {
-  res.json({ connected: !!accessToken });
+router.get('/status', async (req, res) => {
+  const token = await getAccessToken(req.userId);
+  res.json({ connected: !!token });
 });
 
 router.post('/disconnect', async (req, res) => {
-  accessToken = null;
-  fyersClient = null;
-  await repos.connectedApps.deleteToken('default_user', 'fyers');
+  const userId = req.userId;
+  clearTokenCache(userId);
+  await repos.connectedApps.deleteToken(userId, 'fyers');
   res.json({ success: true });
 });
 
 // ── Shared helper (used by brokers/index.js adapter) ───────────────────────
 
-async function fetchHoldings() {
+async function fetchHoldings(tokenOrUserId) {
+  // Accept either a raw token string or a userId (for broker adapter use)
+  let token = tokenOrUserId;
+  if (!token || typeof token !== 'string' || token.length < 10) {
+    return [];
+  }
+
+  const fyersClient = createClient(token);
   const response = await fyersClient.get_holdings();
 
   if (response?.s !== 'ok') {
@@ -195,8 +212,6 @@ function isTokenExpired(err) {
   const msg = err?.message || '';
   return msg.includes('token') || msg.includes('Unauthorized') || msg.includes('Invalid');
 }
-
-function getAccessToken() { return accessToken; }
 
 module.exports = router;
 module.exports.getAccessToken = getAccessToken;

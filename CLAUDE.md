@@ -1,5 +1,24 @@
 # OpenClutch — Project Instructions
 
+## gstack Quick Reference — Invoke These Every Session
+
+| When | Command | What it does |
+|------|---------|-------------|
+| Starting a feature | `/plan-eng-review` | Architecture review before touching code |
+| Done writing code | `/code-review` | Catch bugs, security issues, patterns |
+| Before pushing to Railway | `/cso` | Security audit (OWASP + STRIDE) |
+| After `/cso` passes | `/qa https://humble-blessing-production.up.railway.app` | QA the live app with headless browser |
+| Ready to deploy | `/ship` | Tests → review → push → PR |
+| Every Friday | `/retro` | What shipped, what stalled, what to fix |
+
+**Other useful ones:**
+- `/office-hours` — "Should I build this?" YC-style forcing questions
+- `/investigate` — Stuck on a bug? Systematic root-cause debugging
+- `/canary` — Watch Railway for errors after deploy
+- `/careful` — Before any destructive command (rm, DROP, force-push)
+
+> Claude will NOT auto-invoke these — you must type them. Build the habit.
+
 ## Current State (update this after every session)
 
 **Last updated:** 2026-03-25 | **Last commit:** `f4aec96` — 8-phase codebase cleanup (session 8 changes not yet committed)

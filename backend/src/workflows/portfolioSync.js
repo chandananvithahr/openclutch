@@ -33,7 +33,7 @@ async function fetchHoldings(state) {
   if (state.skipped) return {};
 
   const brokers = require('../brokers');
-  const portfolio = await brokers.getPortfolio();
+  const portfolio = await brokers.getPortfolio(state.userId);
 
   const holdings  = portfolio?.holdings  || [];
   const totalValue    = holdings.reduce((s, h) => s + (h.current_value   || 0), 0);

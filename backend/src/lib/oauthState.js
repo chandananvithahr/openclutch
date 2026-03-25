@@ -5,24 +5,24 @@
 
 const crypto = require('crypto');
 
-// Map of state → { createdAt }
+// Map of state → { createdAt, userId }
 const pendingStates = new Map();
 
 const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes — more than enough for a login
 
-function generateState() {
+function generateState(userId) {
   const state = crypto.randomBytes(24).toString('hex');
-  pendingStates.set(state, { createdAt: Date.now() });
+  pendingStates.set(state, { createdAt: Date.now(), userId: userId || null });
   return state;
 }
 
 function validateState(state) {
-  if (!state) return false;
+  if (!state) return { valid: false, userId: null };
   const entry = pendingStates.get(state);
-  if (!entry) return false;
+  if (!entry) return { valid: false, userId: null };
   pendingStates.delete(state); // single-use
-  if (Date.now() - entry.createdAt > STATE_TTL_MS) return false;
-  return true;
+  if (Date.now() - entry.createdAt > STATE_TTL_MS) return { valid: false, userId: null };
+  return { valid: true, userId: entry.userId };
 }
 
 // Prune expired states every 15 minutes

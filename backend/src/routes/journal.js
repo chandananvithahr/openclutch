@@ -11,7 +11,8 @@ const config = require('../lib/config');
 
 // POST /api/journal/entry — save or update today's journal
 router.post('/entry', async (req, res) => {
-  const { content, userId = 'default_user' } = req.body;
+  const { content } = req.body;
+  const userId = req.userId;
 
   if (!content || typeof content !== 'string' || content.trim().length === 0) {
     return res.status(400).json({ error: 'Journal content is required' });
@@ -56,7 +57,8 @@ router.post('/entry', async (req, res) => {
 
 // GET /api/journal/entries — get journal history
 router.get('/entries', async (req, res) => {
-  const { userId = 'default_user', limit = 30 } = req.query;
+  const userId = req.userId;
+  const { limit = 30 } = req.query;
 
   const { data, error } = await repos.journalEntries.loadHistory(userId, parseInt(limit));
 
@@ -66,7 +68,8 @@ router.get('/entries', async (req, res) => {
 
 // GET /api/journal/insights — mood-money-health patterns
 router.get('/insights', async (req, res) => {
-  const { userId = 'default_user', days = 30 } = req.query;
+  const userId = req.userId;
+  const { days = 30 } = req.query;
 
   const since = new Date();
   since.setDate(since.getDate() - parseInt(days));
@@ -85,7 +88,7 @@ router.get('/insights', async (req, res) => {
 
 // GET /api/journal/streak — current journaling streak
 router.get('/streak', async (req, res) => {
-  const { userId = 'default_user' } = req.query;
+  const userId = req.userId;
 
   const { data, error } = await repos.journalEntries.loadDates(userId);
 

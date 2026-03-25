@@ -36,21 +36,20 @@ const adapters = [
   {
     name: 'Zerodha',
 
-    isConnected() {
+    async isConnected(userId) {
       const z = require('../routes/zerodha');
-      return !!z.getAccessToken();
+      return !!(await z.getAccessToken(userId));
     },
 
-    async getHoldings() {
-      const z    = require('../routes/zerodha');
-      const kite = z.getKite();
-      const raw  = await kite.getHoldings();
+    async getHoldings(userId) {
+      const z = require('../routes/zerodha');
+      const raw = await z.fetchHoldings(userId);
       return raw.map(h => normalizeHolding({
-        symbol:       h.tradingsymbol,
-        name:         h.tradingsymbol,
-        qty:          h.quantity,
-        currentPrice: h.last_price,
-        avgPrice:     h.average_price,
+        symbol:       h.symbol,
+        name:         h.name,
+        qty:          h.qty,
+        currentPrice: h.current_price,
+        avgPrice:     h.buy_price,
         broker:       'Zerodha',
       }));
     },
@@ -59,21 +58,20 @@ const adapters = [
   {
     name: 'Angel One',
 
-    isConnected() {
+    async isConnected(userId) {
       const a = require('../routes/angelone');
-      return !!a.getJwtToken();
+      return !!(await a.getJwtToken(userId));
     },
 
-    async getHoldings() {
-      const a   = require('../routes/angelone');
-      const api = a.getSmartApi();
-      const res = await api.getHolding();
-      return (res.data || []).map(h => normalizeHolding({
-        symbol:       h.tradingsymbol,
-        name:         h.symbolname || h.tradingsymbol,
-        qty:          h.quantity,
-        currentPrice: h.ltp,
-        avgPrice:     h.averageprice,
+    async getHoldings(userId) {
+      const a = require('../routes/angelone');
+      const raw = await a.fetchHoldings(userId);
+      return raw.map(h => normalizeHolding({
+        symbol:       h.symbol,
+        name:         h.name,
+        qty:          h.qty,
+        currentPrice: h.current_price,
+        avgPrice:     h.buy_price,
         broker:       'Angel One',
       }));
     },
@@ -82,13 +80,18 @@ const adapters = [
   {
     name: 'Upstox',
 
-    isConnected() {
+    async isConnected(userId) {
       const u = require('../routes/upstox');
-      return !!u.getAccessToken();
+      return !!(await u.getAccessToken(userId));
     },
 
-    async getHoldings() {
-      const u   = require('../routes/upstox');
+    async getHoldings(userId) {
+      const u = require('../routes/upstox');
+      const token = await u.getAccessToken(userId);
+      if (!token) return [];
+      // Set SDK token before fetching
+      const { ApiClient } = require('upstox-js-sdk');
+      ApiClient.instance.authentications['OAUTH2'].accessToken = token;
       const raw = await u.fetchHoldings();
       return raw.map(h => normalizeHolding({
         symbol:       h.symbol,
@@ -104,14 +107,16 @@ const adapters = [
   {
     name: 'Fyers',
 
-    isConnected() {
+    async isConnected(userId) {
       const f = require('../routes/fyers');
-      return !!f.getAccessToken();
+      return !!(await f.getAccessToken(userId));
     },
 
-    async getHoldings() {
-      const f   = require('../routes/fyers');
-      const raw = await f.fetchHoldings();
+    async getHoldings(userId) {
+      const f = require('../routes/fyers');
+      const token = await f.getAccessToken(userId);
+      if (!token) return [];
+      const raw = await f.fetchHoldings(token);
       return raw.map(h => normalizeHolding({
         symbol:       h.symbol,
         name:         h.name,
@@ -126,14 +131,14 @@ const adapters = [
   {
     name: 'Dhan',
 
-    isConnected() {
+    async isConnected(userId) {
       const d = require('../routes/dhan');
-      return !!d.getAccessToken();
+      return !!(await d.getAccessToken(userId));
     },
 
-    async getHoldings() {
-      const d   = require('../routes/dhan');
-      const raw = await d.fetchHoldings();
+    async getHoldings(userId) {
+      const d = require('../routes/dhan');
+      const raw = await d.fetchHoldings(userId);
       return raw.map(h => normalizeHolding({
         symbol:       h.symbol,
         name:         h.name,
@@ -148,14 +153,19 @@ const adapters = [
   {
     name: '5paisa',
 
-    isConnected() {
+    async isConnected(userId) {
       const f = require('../routes/fivepaisa');
-      return !!f.getAccessToken();
+      return !!(await f.getAccessToken(userId));
     },
 
-    async getHoldings() {
-      const f   = require('../routes/fivepaisa');
-      const raw = await f.fetchHoldings();
+    async getHoldings(userId) {
+      const f     = require('../routes/fivepaisa');
+      const repos = require('../repositories');
+      const token = await f.getAccessToken(userId);
+      if (!token) return [];
+      const { data } = await repos.connectedApps.loadToken(userId, 'fivepaisa');
+      const code = data?.refresh_token || '';
+      const raw  = await f.fetchHoldings(token, code);
       return raw.map(h => normalizeHolding({
         symbol:       h.symbol,
         name:         h.name,
@@ -170,17 +180,17 @@ const adapters = [
 
 // ─── Unified portfolio ────────────────────────────────────────────────────────
 
-async function getPortfolio() {
+async function getPortfolio(userId) {
   const allHoldings = [];
   let   totalValue  = 0;
   let   totalInvested = 0;
   const connected   = [];
 
   for (const adapter of adapters) {
-    if (!adapter.isConnected()) continue;
+    if (!(await adapter.isConnected(userId))) continue;
 
     try {
-      const holdings = await adapter.getHoldings();
+      const holdings = await adapter.getHoldings(userId);
       for (const h of holdings) {
         // Use buy_price * qty for invested, current_price * qty for value
         totalValue    += h.current_price * h.qty;
@@ -220,13 +230,20 @@ async function getPortfolio() {
 }
 
 // Check if any broker is connected (for chat status bar)
-function anyConnected() {
-  return adapters.some(a => a.isConnected());
+async function anyConnected(userId) {
+  for (const a of adapters) {
+    if (await a.isConnected(userId)) return true;
+  }
+  return false;
 }
 
 // Names of all connected brokers
-function connectedNames() {
-  return adapters.filter(a => a.isConnected()).map(a => a.name);
+async function connectedNames(userId) {
+  const names = [];
+  for (const a of adapters) {
+    if (await a.isConnected(userId)) names.push(a.name);
+  }
+  return names;
 }
 
 module.exports = { getPortfolio, anyConnected, connectedNames, adapters };

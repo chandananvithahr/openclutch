@@ -15,27 +15,29 @@ function createOAuthClient() {
   );
 }
 
-// Load tokens from Supabase on startup
-let calendarTokens = null;
+// Per-user token cache — keyed by userId
+const tokenCache = new Map();
 
-async function loadTokensFromDB() {
-  const { data } = await repos.connectedApps.loadToken('default_user', 'google_calendar');
+async function loadTokensFromDB(userId) {
+  const { data } = await repos.connectedApps.loadToken(userId, 'google_calendar');
   if (data?.access_token) {
-    calendarTokens = JSON.parse(data.access_token);
-    logger.info('Google Calendar tokens loaded from Supabase');
+    tokenCache.set(userId, JSON.parse(data.access_token));
+    logger.info('Google Calendar tokens loaded from Supabase', { userId });
   }
 }
 
-loadTokensFromDB().catch(err => logger.error('Calendar token load failed', { err: err.message }));
-
 // GET /api/calendar/login
+// userId passed as query param so it can be embedded in OAuth state
 router.get('/login', (req, res) => {
+  const userId = req.userId;
+  if (!userId) return res.status(400).json({ error: 'userId required' });
+
   const oauth2Client = createOAuthClient();
   const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: ['https://www.googleapis.com/auth/calendar.readonly'],
     prompt: 'consent',
-    state: generateState(),
+    state: generateState(userId),
   });
   if (req.query.json === 'true' || req.headers.accept?.includes('application/json')) {
     return res.json({ loginUrl: url });
@@ -46,7 +48,9 @@ router.get('/login', (req, res) => {
 // GET /api/calendar/callback
 router.get('/callback', async (req, res) => {
   const { code, state } = req.query;
-  if (!validateState(state)) {
+
+  const { valid, userId } = validateState(state);
+  if (!valid || !userId) {
     return res.status(403).send('Invalid or expired OAuth state. Please try connecting again.');
   }
   if (!code) return res.status(400).send('Missing code');
@@ -54,9 +58,9 @@ router.get('/callback', async (req, res) => {
   try {
     const oauth2Client = createOAuthClient();
     const { tokens } = await oauth2Client.getToken(code);
-    calendarTokens = tokens;
+    tokenCache.set(userId, tokens);
 
-    await repos.connectedApps.saveToken('default_user', 'google_calendar', {
+    await repos.connectedApps.saveToken(userId, 'google_calendar', {
       accessToken: JSON.stringify(tokens),
     });
 
@@ -75,30 +79,41 @@ router.get('/callback', async (req, res) => {
 });
 
 // GET /api/calendar/status
-router.get('/status', (req, res) => {
-  res.json({ connected: !!calendarTokens });
+router.get('/status', async (req, res) => {
+  const userId = req.userId;
+  if (!tokenCache.has(userId)) {
+    await loadTokensFromDB(userId).catch(() => {});
+  }
+  res.json({ connected: tokenCache.has(userId) });
 });
 
-// Shared OAuth client with auto-refresh
-function getAuthenticatedClient() {
-  const oauth2Client = createOAuthClient();
-  oauth2Client.setCredentials(calendarTokens);
+// Shared OAuth client with auto-refresh — per-user tokens
+function getAuthenticatedClient(userId) {
+  const tokens = tokenCache.get(userId);
+  if (!tokens) return null;
 
-  oauth2Client.on('tokens', async (tokens) => {
-    calendarTokens = { ...calendarTokens, ...tokens };
-    await repos.connectedApps.saveToken('default_user', 'google_calendar', {
-      accessToken: JSON.stringify(calendarTokens),
+  const oauth2Client = createOAuthClient();
+  oauth2Client.setCredentials(tokens);
+
+  oauth2Client.on('tokens', async (newTokens) => {
+    const merged = { ...tokens, ...newTokens };
+    tokenCache.set(userId, merged);
+    await repos.connectedApps.saveToken(userId, 'google_calendar', {
+      accessToken: JSON.stringify(merged),
     });
   });
 
   return oauth2Client;
 }
 
-// Get today's events
-async function getTodaySchedule() {
-  if (!calendarTokens) return null;
+// Get today's events — called by tool executor (userId required)
+async function getTodaySchedule(userId) {
+  if (!tokenCache.has(userId)) {
+    await loadTokensFromDB(userId).catch(() => {});
+  }
+  if (!tokenCache.has(userId)) return null;
 
-  const oauth2Client = getAuthenticatedClient();
+  const oauth2Client = getAuthenticatedClient(userId);
   const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
   const now = new Date();
@@ -143,11 +158,14 @@ async function getTodaySchedule() {
   };
 }
 
-// Get upcoming events (next N days)
-async function getUpcomingEvents(days = 7) {
-  if (!calendarTokens) return null;
+// Get upcoming events (next N days) — called by tool executor (userId required)
+async function getUpcomingEvents(userId, days = 7) {
+  if (!tokenCache.has(userId)) {
+    await loadTokensFromDB(userId).catch(() => {});
+  }
+  if (!tokenCache.has(userId)) return null;
 
-  const oauth2Client = getAuthenticatedClient();
+  const oauth2Client = getAuthenticatedClient(userId);
   const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
   const now = new Date();
@@ -192,11 +210,14 @@ async function getUpcomingEvents(days = 7) {
   };
 }
 
-// Check free slots today (for "when am I free?" queries)
-async function getFreeSlots() {
-  if (!calendarTokens) return null;
+// Check free slots today — called by tool executor (userId required)
+async function getFreeSlots(userId) {
+  if (!tokenCache.has(userId)) {
+    await loadTokensFromDB(userId).catch(() => {});
+  }
+  if (!tokenCache.has(userId)) return null;
 
-  const schedule = await getTodaySchedule();
+  const schedule = await getTodaySchedule(userId);
   if (!schedule) return null;
 
   const busySlots = schedule.events
@@ -246,8 +267,15 @@ async function getFreeSlots() {
   };
 }
 
+async function isConnected(userId) {
+  if (!tokenCache.has(userId)) {
+    await loadTokensFromDB(userId).catch(() => {});
+  }
+  return tokenCache.has(userId);
+}
+
 module.exports = router;
 module.exports.getTodaySchedule = getTodaySchedule;
 module.exports.getUpcomingEvents = getUpcomingEvents;
 module.exports.getFreeSlots = getFreeSlots;
-module.exports.isConnected = () => !!calendarTokens;
+module.exports.isConnected = isConnected;

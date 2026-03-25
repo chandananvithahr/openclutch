@@ -34,7 +34,8 @@ function formatProfile(p) {
 
 // POST /api/chat
 router.post('/', rateLimitMiddleware, asyncHandler(async (req, res) => {
-  const { messages, tone = 'pro', userId = 'default_user' } = req.body;
+  const { messages, tone = 'pro' } = req.body;
+  const userId = req.userId;
 
   if (!messages || !Array.isArray(messages)) {
     throw new HTTPError(400, 'messages array is required');
@@ -89,9 +90,9 @@ router.post('/', rateLimitMiddleware, asyncHandler(async (req, res) => {
 
   // --- Connected services (safe service name list for system prompt) ---
   const connectedServices = [];
-  if (zerodha.getAccessToken()) connectedServices.push('Zerodha (portfolio & holdings)');
-  if (angelone.getJwtToken())   connectedServices.push('Angel One (portfolio & holdings)');
-  if (gmail.isConnected())      connectedServices.push('Gmail (emails)');
+  if (await zerodha.getAccessToken(userId)) connectedServices.push('Zerodha (portfolio & holdings)');
+  if (await angelone.getJwtToken(userId))  connectedServices.push('Angel One (portfolio & holdings)');
+  if (await gmail.isConnected(userId)) connectedServices.push('Gmail (emails)');
 
   // --- Step 1: First OpenAI call ---
   let aiMessage = await chat({ messages: messagesWithContext, tools, tone, connectedServices });
@@ -169,7 +170,8 @@ router.post('/', rateLimitMiddleware, asyncHandler(async (req, res) => {
 // POST /api/chat/stream — Crucix SSE pattern: tools non-streaming, final answer streaming
 // myChat pattern: first chunk creates bubble, subsequent chunks append content
 router.post('/stream', rateLimitMiddleware, asyncHandler(async (req, res) => {
-  const { messages, tone = 'pro', userId = 'default_user' } = req.body;
+  const { messages, tone = 'pro' } = req.body;
+  const userId = req.userId;
 
   if (!messages || !Array.isArray(messages)) throw new HTTPError(400, 'messages array is required');
   if (tone && !VALID_TONES.includes(tone)) throw new HTTPError(400, `Invalid tone`);
@@ -201,9 +203,9 @@ router.post('/stream', rateLimitMiddleware, asyncHandler(async (req, res) => {
 
   // Connected services
   const connectedServices = [];
-  if (zerodha.getAccessToken()) connectedServices.push('Zerodha (portfolio & holdings)');
-  if (angelone.getJwtToken())   connectedServices.push('Angel One (portfolio & holdings)');
-  if (gmail.isConnected())      connectedServices.push('Gmail (emails)');
+  if (await zerodha.getAccessToken(userId)) connectedServices.push('Zerodha (portfolio & holdings)');
+  if (await angelone.getJwtToken(userId))  connectedServices.push('Angel One (portfolio & holdings)');
+  if (await gmail.isConnected(userId)) connectedServices.push('Gmail (emails)');
 
   // Step 1: Non-streaming call to detect tool calls (Crucix pattern)
   let aiMessage = await chat({ messages: messagesWithContext, tools, tone, connectedServices });
@@ -273,7 +275,7 @@ router.post('/stream', rateLimitMiddleware, asyncHandler(async (req, res) => {
 
 // GET /api/chat/history
 router.get('/history', asyncHandler(async (req, res) => {
-  const { userId = 'default_user' } = req.query;
+  const userId = req.userId;
   const limit = parseInt(req.query.limit) || config.HISTORY.DEFAULT_LIMIT;
 
   const { data, error } = await repos.messages.loadHistory(userId, limit);
@@ -283,7 +285,7 @@ router.get('/history', asyncHandler(async (req, res) => {
 
 // GET /api/chat/facts
 router.get('/facts', asyncHandler(async (req, res) => {
-  const { userId = 'default_user' } = req.query;
+  const userId = req.userId;
 
   const { data, error } = await repos.userFacts.loadAll(userId);
   if (error) throw new HTTPError(500, error.message);

@@ -39,12 +39,11 @@ router.get('/', (req, res) => {
 
 router.post('/trigger/:name', asyncHandler(async (req, res) => {
   const { name } = req.params;
-  const userId   = req.body.userId || req.query.userId;
+  const userId = req.userId;
 
   if (!TRIGGERABLE[name]) {
     throw new HTTPError(404, `Unknown or non-triggerable workflow: ${name}`);
   }
-  if (!userId) throw new HTTPError(400, 'userId is required');
 
   const required = TRIGGERABLE[name];
   for (const field of required) {
@@ -74,11 +73,9 @@ router.post('/trigger/:name', asyncHandler(async (req, res) => {
 // ─── Notification routes ──────────────────────────────────────────────────────
 
 router.get('/notifications', asyncHandler(async (req, res) => {
-  const userId    = req.query.userId;
+  const userId = req.userId;
   const limit     = parseInt(req.query.limit || '20', 10);
   const unreadOnly = req.query.unread === 'true';
-
-  if (!userId) throw new HTTPError(400, 'userId is required');
 
   const { notifications, error } = await loadNotifications(userId, limit, unreadOnly);
   if (error) throw new HTTPError(500, error);
@@ -87,16 +84,15 @@ router.get('/notifications', asyncHandler(async (req, res) => {
 }));
 
 router.get('/notifications/unread', asyncHandler(async (req, res) => {
-  const userId = req.query.userId;
-  if (!userId) throw new HTTPError(400, 'userId is required');
+  const userId = req.userId;
 
   const count = await unreadCount(userId);
   res.json({ unread: count });
 }));
 
 router.post('/notifications/read', asyncHandler(async (req, res) => {
-  const { userId, ids } = req.body;
-  if (!userId) throw new HTTPError(400, 'userId is required');
+  const userId = req.userId;
+  const { ids } = req.body;
   if (!Array.isArray(ids)) throw new HTTPError(400, 'ids must be an array');
 
   await markRead(userId, ids);
@@ -104,8 +100,7 @@ router.post('/notifications/read', asyncHandler(async (req, res) => {
 }));
 
 router.post('/notifications/read-all', asyncHandler(async (req, res) => {
-  const { userId } = req.body;
-  if (!userId) throw new HTTPError(400, 'userId is required');
+  const userId = req.userId;
 
   await markAllRead(userId);
   res.json({ ok: true });

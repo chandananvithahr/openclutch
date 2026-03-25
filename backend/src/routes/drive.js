@@ -38,7 +38,8 @@ const READABLE_MIME_TYPES = {
 
 const MAX_TEXT_FOR_AI = 12_000;
 
-let driveTokens = null;
+// Per-user token cache — keyed by userId
+const tokenCache = new Map();
 
 function createOAuthClient() {
   return new google.auth.OAuth2(
@@ -48,32 +49,44 @@ function createOAuthClient() {
   );
 }
 
-async function loadTokensFromDB() {
-  const { data } = await repos.connectedApps.loadToken('default_user', 'google_drive');
+async function loadTokensFromDB(userId) {
+  const { data } = await repos.connectedApps.loadToken(userId, 'google_drive');
   if (data?.access_token) {
-    driveTokens = JSON.parse(data.access_token);
-    logger.info('Google Drive tokens loaded from Supabase');
+    tokenCache.set(userId, JSON.parse(data.access_token));
+    logger.info('Google Drive tokens loaded from Supabase', { userId });
   }
 }
 
-loadTokensFromDB().catch(err => logger.error('Drive token load failed', { err: err.message }));
-
-function getDriveClient() {
-  if (!driveTokens) throw new HTTPError(401, 'Google Drive not connected. Visit /api/drive/login first.');
+function getDriveClient(userId) {
+  const tokens = tokenCache.get(userId);
+  if (!tokens) throw new HTTPError(401, 'Google Drive not connected. Visit /api/drive/login first.');
   const oauth2Client = createOAuthClient();
-  oauth2Client.setCredentials(driveTokens);
+  oauth2Client.setCredentials(tokens);
+
+  oauth2Client.on('tokens', async (newTokens) => {
+    const merged = { ...tokens, ...newTokens };
+    tokenCache.set(userId, merged);
+    await repos.connectedApps.saveToken(userId, 'google_drive', {
+      accessToken: JSON.stringify(merged),
+    });
+  });
+
   return google.drive({ version: 'v3', auth: oauth2Client });
 }
 
 // ── OAuth ────────────────────────────────────────────────────────────────────
 
+// userId passed as query param so it can be embedded in OAuth state
 router.get('/login', (req, res) => {
+  const userId = req.userId;
+  if (!userId) return res.status(400).json({ error: 'userId required' });
+
   const oauth2Client = createOAuthClient();
   const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: ['https://www.googleapis.com/auth/drive.readonly'],
     prompt: 'consent',
-    state: generateState(),
+    state: generateState(userId),
   });
   if (req.query.json === 'true' || req.headers.accept?.includes('application/json')) {
     return res.json({ loginUrl: url });
@@ -83,20 +96,22 @@ router.get('/login', (req, res) => {
 
 router.get('/callback', asyncHandler(async (req, res) => {
   const { code, state } = req.query;
-  if (!validateState(state)) {
+
+  const { valid, userId } = validateState(state);
+  if (!valid || !userId) {
     return res.status(403).send('Invalid or expired OAuth state. Please try connecting again.');
   }
   if (!code) return res.status(400).send('Missing code');
 
   const oauth2Client = createOAuthClient();
   const { tokens } = await oauth2Client.getToken(code);
-  driveTokens = tokens;
+  tokenCache.set(userId, tokens);
 
-  await repos.connectedApps.saveToken('default_user', 'google_drive', {
+  await repos.connectedApps.saveToken(userId, 'google_drive', {
     accessToken: JSON.stringify(tokens),
   });
 
-  logger.info('Google Drive connected');
+  logger.info('Google Drive connected', { userId });
 
   res.send(`
     <html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#2D1B14;color:#F5F0EB">
@@ -108,13 +123,18 @@ router.get('/callback', asyncHandler(async (req, res) => {
   `);
 }));
 
-router.get('/status', (req, res) => {
-  res.json({ connected: !!driveTokens });
-});
+router.get('/status', asyncHandler(async (req, res) => {
+  const userId = req.userId;
+  if (!tokenCache.has(userId)) {
+    await loadTokensFromDB(userId).catch(() => {});
+  }
+  res.json({ connected: tokenCache.has(userId) });
+}));
 
 router.post('/disconnect', asyncHandler(async (req, res) => {
-  driveTokens = null;
-  await repos.connectedApps.saveToken('default_user', 'google_drive', { accessToken: null });
+  const userId = req.userId;
+  tokenCache.delete(userId);
+  await repos.connectedApps.saveToken(userId, 'google_drive', { accessToken: null });
   res.json({ success: true });
 }));
 
@@ -122,7 +142,12 @@ router.post('/disconnect', asyncHandler(async (req, res) => {
 
 // GET /api/drive/files?query=budget&pageSize=20
 router.get('/files', asyncHandler(async (req, res) => {
-  const drive    = getDriveClient();
+  const userId = req.userId;
+  if (!tokenCache.has(userId)) {
+    await loadTokensFromDB(userId).catch(() => {});
+  }
+
+  const drive    = getDriveClient(userId);
   const pageSize = Math.min(parseInt(req.query.pageSize || '20', 10), 50);
   const query    = req.query.query;
 
@@ -159,11 +184,16 @@ router.get('/files', asyncHandler(async (req, res) => {
 
 // POST /api/drive/analyze   body: { fileId, question?, tone? }
 router.post('/analyze', asyncHandler(async (req, res) => {
+  const userId = req.userId;
+  if (!tokenCache.has(userId)) {
+    await loadTokensFromDB(userId).catch(() => {});
+  }
+
   const { fileId, question, tone = 'pro' } = req.body;
 
   if (!fileId) throw new HTTPError(400, 'fileId is required');
 
-  const drive = getDriveClient();
+  const drive = getDriveClient(userId);
 
   // Get file metadata first
   const meta = await drive.files.get({
@@ -252,7 +282,7 @@ router.post('/analyze', asyncHandler(async (req, res) => {
     systemExtra: `The user has shared a file from Google Drive. ${metaParts.join('. ')}. Extract key information, highlight important numbers, flag anything unusual. Be specific — mention exact amounts, dates, names.`,
   });
 
-  logger.info('Drive file analyzed', { fileId, name, type: fileType, truncated });
+  logger.info('Drive file analyzed', { fileId, name, type: fileType, truncated, userId });
 
   res.json({
     reply: aiMessage.content,

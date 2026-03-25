@@ -45,28 +45,29 @@ function extractBody(payload) {
   return '';
 }
 
-// Load tokens from Supabase on startup
-let gmailTokens = null;
+// Per-user token cache — keyed by userId
+const tokenCache = new Map();
 
-async function loadTokensFromDB() {
-  const { data } = await repos.connectedApps.loadToken('default_user', 'gmail');
-
+async function loadTokensFromDB(userId) {
+  const { data } = await repos.connectedApps.loadToken(userId, 'gmail');
   if (data?.access_token) {
-    gmailTokens = JSON.parse(data.access_token);
-    logger.info('Gmail tokens loaded from Supabase');
+    tokenCache.set(userId, JSON.parse(data.access_token));
+    logger.info('Gmail tokens loaded from Supabase', { userId });
   }
 }
 
-loadTokensFromDB().catch(err => logger.error('Gmail token load failed', { err: err.message }));
-
 // GET /api/gmail/login — returns JSON for app, redirects for browser
+// userId passed as query param so it can be embedded in OAuth state
 router.get('/login', (req, res) => {
+  const userId = req.userId;
+  if (!userId) return res.status(400).json({ error: 'userId required' });
+
   const oauth2Client = createOAuthClient();
   const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: ['https://www.googleapis.com/auth/gmail.readonly'],
     prompt: 'consent',
-    state: generateState(),
+    state: generateState(userId),
   });
   if (req.query.json === 'true' || req.headers.accept?.includes('application/json')) {
     return res.json({ loginUrl: url });
@@ -78,7 +79,8 @@ router.get('/login', (req, res) => {
 router.get('/callback', async (req, res) => {
   const { code, state } = req.query;
 
-  if (!validateState(state)) {
+  const { valid, userId } = validateState(state);
+  if (!valid || !userId) {
     return res.status(403).send('Invalid or expired OAuth state. Please try connecting again.');
   }
   if (!code) return res.status(400).send('Missing code');
@@ -86,10 +88,10 @@ router.get('/callback', async (req, res) => {
   try {
     const oauth2Client = createOAuthClient();
     const { tokens } = await oauth2Client.getToken(code);
-    gmailTokens = tokens;
+    tokenCache.set(userId, tokens);
 
     // Save to Supabase
-    await repos.connectedApps.saveToken('default_user', 'gmail', {
+    await repos.connectedApps.saveToken(userId, 'gmail', {
       accessToken: JSON.stringify(tokens),
     });
 
@@ -108,30 +110,41 @@ router.get('/callback', async (req, res) => {
 });
 
 // GET /api/gmail/status
-router.get('/status', (req, res) => {
-  res.json({ connected: !!gmailTokens });
+router.get('/status', async (req, res) => {
+  const userId = req.userId;
+  if (!tokenCache.has(userId)) {
+    await loadTokensFromDB(userId).catch(() => {});
+  }
+  res.json({ connected: tokenCache.has(userId) });
 });
 
-// Shared OAuth client with auto-refresh — avoids registering listener multiple times
-function getAuthenticatedClient() {
-  const oauth2Client = createOAuthClient();
-  oauth2Client.setCredentials(gmailTokens);
+// Shared OAuth client with auto-refresh — per-user tokens
+function getAuthenticatedClient(userId) {
+  const tokens = tokenCache.get(userId);
+  if (!tokens) return null;
 
-  oauth2Client.on('tokens', async (tokens) => {
-    gmailTokens = { ...gmailTokens, ...tokens };
-    await repos.connectedApps.saveToken('default_user', 'gmail', {
-      accessToken: JSON.stringify(gmailTokens),
+  const oauth2Client = createOAuthClient();
+  oauth2Client.setCredentials(tokens);
+
+  oauth2Client.on('tokens', async (newTokens) => {
+    const merged = { ...tokens, ...newTokens };
+    tokenCache.set(userId, merged);
+    await repos.connectedApps.saveToken(userId, 'gmail', {
+      accessToken: JSON.stringify(merged),
     });
   });
 
   return oauth2Client;
 }
 
-// Fetch emails — called by tool executor
-async function fetchEmails(count = 10) {
-  if (!gmailTokens) return null;
+// Fetch emails — called by tool executor (userId required)
+async function fetchEmails(userId, count = 10) {
+  if (!tokenCache.has(userId)) {
+    await loadTokensFromDB(userId).catch(() => {});
+  }
+  if (!tokenCache.has(userId)) return null;
 
-  const oauth2Client = getAuthenticatedClient();
+  const oauth2Client = getAuthenticatedClient(userId);
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
   // Get list of unread message IDs
@@ -170,10 +183,13 @@ async function fetchEmails(count = 10) {
   return { emails, total_unread: totalUnread };
 }
 
-async function searchEmails(query, count = 5) {
-  if (!gmailTokens) return null;
+async function searchEmails(userId, query, count = 5) {
+  if (!tokenCache.has(userId)) {
+    await loadTokensFromDB(userId).catch(() => {});
+  }
+  if (!tokenCache.has(userId)) return null;
 
-  const oauth2Client = getAuthenticatedClient();
+  const oauth2Client = getAuthenticatedClient(userId);
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
   const listRes = await gmail.users.messages.list({
@@ -212,7 +228,14 @@ async function searchEmails(query, count = 5) {
   return { emails, query };
 }
 
+async function isConnected(userId) {
+  if (!tokenCache.has(userId)) {
+    await loadTokensFromDB(userId).catch(() => {});
+  }
+  return tokenCache.has(userId);
+}
+
 module.exports = router;
 module.exports.fetchEmails = fetchEmails;
 module.exports.searchEmails = searchEmails;
-module.exports.isConnected = () => !!gmailTokens;
+module.exports.isConnected = isConnected;

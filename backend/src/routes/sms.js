@@ -13,7 +13,8 @@ const config = require('../lib/config');
 // POST /api/sms/transactions
 // Mobile sends batch of parsed bank SMS transactions
 router.post('/transactions', async (req, res) => {
-  const { transactions, userId = 'default_user' } = req.body;
+  const { transactions } = req.body;
+  const userId = req.userId;
 
   if (!Array.isArray(transactions) || transactions.length === 0) {
     return res.status(400).json({ error: 'transactions array required' });
@@ -37,21 +38,22 @@ router.post('/transactions', async (req, res) => {
 
 // POST /api/sms/sync-email — triggered automatically when Gmail is connected
 router.post('/sync-email', async (req, res) => {
-  const { userId = 'default_user' } = req.body;
+  const userId = req.userId;
   const result = await syncEmailTransactions(userId);
   res.json(result);
 });
 
 // GET /api/sms/spending?userId=&month=2026-03
 router.get('/spending', async (req, res) => {
-  const { userId = 'default_user', month } = req.query;
+  const userId = req.userId;
+  const { month } = req.query;
   const summary = await getSpendingData(userId, month);
   res.json(summary);
 });
 
 // GET /api/sms/recent — shows last 20 stored transactions (for debugging)
 router.get('/recent', async (req, res) => {
-  const { userId = 'default_user' } = req.query;
+  const userId = req.userId;
   const { data, error } = await repos.transactions.loadRecent(userId, config.SPENDING.RECENT_TXNS_LIMIT);
 
   if (error) return res.status(500).json({ error: error.message });
@@ -60,7 +62,7 @@ router.get('/recent', async (req, res) => {
 
 // GET /api/sms/status
 router.get('/status', async (req, res) => {
-  const { userId = 'default_user' } = req.query;
+  const userId = req.userId;
   const { count, error } = await repos.transactions.count(userId);
 
   res.json({ connected: !error && count > 0, transaction_count: count });
@@ -122,7 +124,8 @@ async function syncEmailTransactions(userId) {
     return { error: 'Gmail module not available' };
   }
 
-  if (!gmail.isConnected()) {
+  const gmailConnected = await gmail.isConnected(userId);
+  if (!gmailConnected) {
     return { skipped: true, reason: 'Gmail not connected' };
   }
 
@@ -131,7 +134,7 @@ async function syncEmailTransactions(userId) {
 
   let emailData;
   try {
-    emailData = await gmail.searchEmails(bankEmailQuery, 100);
+    emailData = await gmail.searchEmails(userId, bankEmailQuery, 100);
   } catch (err) {
     return { error: `Gmail search failed: ${err.message}` };
   }

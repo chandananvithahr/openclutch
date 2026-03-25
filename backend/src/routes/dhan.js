@@ -17,27 +17,58 @@ const logger = require('../lib/logger');
 
 const router = express.Router();
 
-// In-memory state — loaded from Supabase on startup
-let accessToken = null;
-let clientId    = null;
-let dhanClient  = null;
+// ── Per-user token cache ─────────────────────────────────────────────────────
+
+const tokenCache = new Map();
+const TOKEN_TTL  = 30 * 60 * 1000; // 30 minutes
+
+async function getAccessToken(userId) {
+  if (!userId) return null;
+  const key    = `${userId}:dhan`;
+  const cached = tokenCache.get(key);
+  if (cached && Date.now() < cached.expiresAt) return cached.token;
+  const { data } = await repos.connectedApps.loadToken(userId, 'dhan');
+  if (data?.access_token) {
+    tokenCache.set(key, { token: data.access_token, expiresAt: Date.now() + TOKEN_TTL });
+    return data.access_token;
+  }
+  return null;
+}
+
+function clearTokenCache(userId) {
+  tokenCache.delete(`${userId}:dhan`);
+}
+
+// ── Shared helpers ───────────────────────────────────────────────────────────
 
 function createClient(token, id) {
   return new DhanHqClient({ accessToken: token, clientId: id });
 }
 
-async function loadTokenFromDB() {
-  const { data } = await repos.connectedApps.loadToken('default_user', 'dhan');
-  if (data?.access_token) {
-    // Store clientId in refresh_token field (repurposed for non-OAuth brokers)
-    accessToken = data.access_token;
-    clientId    = data.refresh_token || '';
-    dhanClient  = createClient(accessToken, clientId);
-    logger.info('Dhan token loaded from Supabase');
-  }
+function isTokenExpired(err) {
+  const msg = err?.message || '';
+  return msg.includes('access-token') || msg.includes('Unauthorized') || msg.includes('800');
 }
 
-loadTokenFromDB().catch(err => logger.error('Dhan token load failed', { err: err.message }));
+async function fetchHoldings(userId) {
+  const token = await getAccessToken(userId);
+  if (!token) throw new Error('Dhan not connected');
+  // Load clientId from DB (stored in refresh_token column)
+  const { data } = await repos.connectedApps.loadToken(userId, 'dhan');
+  const id = data?.refresh_token || '';
+  const client = createClient(token, id);
+  const response = await client.getHoldings();
+
+  // SDK returns { data: [...] } or throws on auth error
+  return (response?.data || []).map(h => ({
+    symbol:        h.tradingSymbol,
+    name:          h.tradingSymbol,
+    qty:           h.totalQty,
+    buy_price:     parseFloat((h.avgCostPrice || 0).toFixed(2)),
+    current_price: parseFloat((h.ltp          || 0).toFixed(2)),
+    broker:        'Dhan',
+  }));
+}
 
 // ── Connect (token auth — no OAuth redirect needed) ─────────────────────────
 
@@ -45,6 +76,7 @@ loadTokenFromDB().catch(err => logger.error('Dhan token load failed', { err: err
 // Body: { accessToken, clientId }
 // User gets these from DhanHQ → My Profile → Apps & Credentials
 router.post('/connect', async (req, res) => {
+  const userId = req.userId;
   const { accessToken: token, clientId: id } = req.body;
 
   if (!token) return res.status(400).json({ error: 'accessToken is required' });
@@ -55,20 +87,20 @@ router.post('/connect', async (req, res) => {
     const testClient = createClient(token, id);
     await testClient.getHoldings(); // throws if invalid
 
-    accessToken = token;
-    clientId    = id;
-    dhanClient  = createClient(accessToken, clientId);
-
     // Store clientId in refresh_token column (it's not a secret, just an ID)
-    await repos.connectedApps.saveToken('default_user', 'dhan', {
-      accessToken: token,
+    await repos.connectedApps.saveToken(userId, 'dhan', {
+      accessToken:  token,
       refreshToken: id,
     });
 
-    logger.info('Dhan connected successfully');
+    // Populate cache immediately
+    const key = `${userId}:dhan`;
+    tokenCache.set(key, { token, expiresAt: Date.now() + TOKEN_TTL });
+
+    logger.info('Dhan connected successfully', { userId });
     res.json({ success: true, message: 'Dhan connected!' });
   } catch (err) {
-    logger.error('Dhan connect error', { err: err.message });
+    logger.error('Dhan connect error', { userId, err: err.message });
     res.status(401).json({ error: `Dhan connection failed: ${err.message}. Check your access token and client ID.` });
   }
 });
@@ -77,7 +109,10 @@ router.post('/connect', async (req, res) => {
 
 // GET /api/dhan/portfolio
 router.get('/portfolio', async (req, res) => {
-  if (!accessToken) {
+  const userId = req.userId;
+  const token  = await getAccessToken(userId);
+
+  if (!token) {
     return res.status(401).json({
       error:  'Dhan not connected. POST /api/dhan/connect with your accessToken and clientId.',
       action: 'connect_dhan',
@@ -85,7 +120,7 @@ router.get('/portfolio', async (req, res) => {
   }
 
   try {
-    const holdings = await fetchHoldings();
+    const holdings = await fetchHoldings(userId);
 
     let totalValue    = 0;
     let totalInvested = 0;
@@ -117,52 +152,28 @@ router.get('/portfolio', async (req, res) => {
     });
   } catch (err) {
     if (isTokenExpired(err)) {
-      accessToken = null;
-      dhanClient  = null;
+      clearTokenCache(userId);
       return res.status(401).json({ error: 'Dhan token expired. Please reconnect.', reconnect: true });
     }
-    logger.error('Dhan portfolio fetch error', { err: err.message });
+    logger.error('Dhan portfolio fetch error', { userId, err: err.message });
     res.status(500).json({ error: err.message });
   }
 });
 
 // ── Status / disconnect ─────────────────────────────────────────────────────
 
-router.get('/status', (req, res) => {
-  res.json({ connected: !!accessToken });
+router.get('/status', async (req, res) => {
+  const token = await getAccessToken(req.userId);
+  res.json({ connected: !!token });
 });
 
 router.post('/disconnect', async (req, res) => {
-  accessToken = null;
-  clientId    = null;
-  dhanClient  = null;
-  await repos.connectedApps.deleteToken('default_user', 'dhan');
+  const userId = req.userId;
+  clearTokenCache(userId);
+  await repos.connectedApps.deleteToken(userId, 'dhan');
   res.json({ success: true });
 });
 
-// ── Shared helper (used by brokers/index.js adapter) ───────────────────────
-
-async function fetchHoldings() {
-  const response = await dhanClient.getHoldings();
-
-  // SDK returns { data: [...] } or throws on auth error
-  return (response?.data || []).map(h => ({
-    symbol:        h.tradingSymbol,
-    name:          h.tradingSymbol,
-    qty:           h.totalQty,
-    buy_price:     parseFloat((h.avgCostPrice || 0).toFixed(2)),
-    current_price: parseFloat((h.ltp          || 0).toFixed(2)),
-    broker:        'Dhan',
-  }));
-}
-
-function isTokenExpired(err) {
-  const msg = err?.message || '';
-  return msg.includes('access-token') || msg.includes('Unauthorized') || msg.includes('800');
-}
-
-function getAccessToken() { return accessToken; }
-
-module.exports = router;
+module.exports        = router;
 module.exports.getAccessToken = getAccessToken;
 module.exports.fetchHoldings  = fetchHoldings;

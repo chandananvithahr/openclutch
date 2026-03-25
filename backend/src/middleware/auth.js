@@ -14,20 +14,16 @@ const JWT_SECRET  = process.env.JWT_SECRET;
 const JWT_EXPIRES = '30d'; // long-lived for mobile — user shouldn't re-login constantly
 
 // Routes that don't require auth (OAuth callbacks must be open — browser redirects have no token)
+// Only callbacks are public — browser redirects from OAuth providers carry no JWT.
+// Login routes require auth so userId can be embedded in OAuth state.
 const PUBLIC_PATHS = new Set([
-  '/api/zerodha/login',
   '/api/zerodha/callback',
-  '/api/upstox/login',
   '/api/upstox/callback',
-  '/api/fyers/login',
   '/api/fyers/callback',
-  '/api/gmail/login',
   '/api/gmail/callback',
-  '/api/calendar/login',
   '/api/calendar/callback',
-  '/api/drive/login',
   '/api/drive/callback',
-  '/api/auth/token',   // token issuance endpoint
+  '/api/auth/token',   // token issuance endpoint (bootstrap — replaced by real auth later)
   '/health',
 ]);
 
@@ -36,10 +32,9 @@ function authMiddleware(req, res, next) {
   if (PUBLIC_PATHS.has(req.path)) return next();
 
   if (!JWT_SECRET) {
-    // JWT_SECRET not set — warn but allow through (dev fallback, never in prod)
-    logger.warn('JWT_SECRET not set — auth disabled. Set JWT_SECRET env var.');
-    req.userId = req.body?.userId || req.query?.userId || 'dev_user';
-    return next();
+    // JWT_SECRET is required at startup (server.js REQUIRED_ENV check) — this should never happen.
+    // If it does, reject the request rather than allowing unauthenticated access.
+    return res.status(500).json({ error: 'Server misconfigured — auth unavailable.' });
   }
 
   const authHeader = req.headers['authorization'];
