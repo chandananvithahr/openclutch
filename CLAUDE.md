@@ -24,11 +24,13 @@
 **Last updated:** 2026-03-26 | **Last commit:** `b3a3565` — Angel One MPIN fix + timeout
 
 ### What's Built ✅
-- Backend: Express server, all routes (chat, zerodha, angelone, gmail, calendar, sms, cas, journal, career, health, workflows, onboarding)
+- Backend: Express server, all routes (chat, zerodha, angelone, upstox, fyers, gmail, calendar, sms, cas, journal, career, health, workflows, onboarding, files, drive)
 - 3-tier memory system (sliding window + LLM summary + GPT facts)
 - 27 AI tools defined + executor routing
 - Workflow engine (DeerFlow2 pattern): emailSync, portfolioSync, healthSync, weeklyReview, smsIngestion
-- Broker adapters: Zerodha ✅, Angel One ✅, Upstox ✅, Fyers ✅, Dhan ✅, 5paisa ✅, **Groww ⬜ (building)**
+- Broker adapters: Zerodha ✅, Angel One ✅, Upstox ✅, Fyers ✅ (4 OAuth-scalable brokers)
+- **Removed:** Groww, Dhan, 5paisa (non-scalable per-user API key model — not suitable for millions of users)
+- **Removed:** WhatsApp integration (dropped from scope)
 - Mobile: ChatScreen, useChat hook, smsParser, healthConnect (Android), healthKit (iOS), unified health.js
 - Mobile onboarding: `OnboardingFlow.js` (10-screen adaptive Cleo-style) + `OnboardingCard.js` ✅
 - Supabase tables: messages, connected_apps, user_facts, sms_transactions, journal_entries, career_profiles, job_applications, user_profiles, notifications, health_data, memories (pgvector) ✅ — ALL with RLS enabled
@@ -45,18 +47,15 @@
 | Fyers | ✅ Working | ₹3.12L, 25 holdings confirmed |
 | Angel One | ✅ Working | Connected, empty portfolio (no stocks in account) |
 | Upstox | ❌ Blocked | User's Upstox account is deactivated |
-| Dhan | ⬜ Not tested | Needs credentials |
-| 5paisa | ⬜ Not tested | Needs credentials |
-| Groww | ⬜ Building now | API Key + Secret available, route not yet built |
 
 ### What's NOT Built Yet ❌
-- Groww broker integration (`routes/groww.js`) — building now
 - Android device test with Railway backend end-to-end
-- Dhan + 5paisa live testing
+- Fix critical security findings (see `docs/SECURITY_CRITICALS.md`)
+- Account Aggregator (AA) integration for scale (Finvu/OneMoney — future)
 
 ### Next Up (in order)
-1. Build Groww broker integration
-2. Test Dhan + 5paisa
+1. Fix critical security: auth bypass (#1 in SECURITY_CRITICALS.md)
+2. Fix Fyers OAuth state bypass, Upstox singleton race condition
 3. Android device end-to-end test
 4. Add ALLOWED_ORIGINS to Railway
 
@@ -94,7 +93,7 @@ Hooks are active at `.claude/settings.json`:
 ## What This Is
 > **Your life's control room — one AI that knows your money, career, health, and mood, and connects the dots between them.**
 
-Personal AI assistant for Indian users (28–35). Chat-first interface. 6 life domains: Money, Wealth, Career, Health, Mind, Time. Connects to 6 brokers, Gmail, bank SMS, health data, mutual funds. The moat is **cross-domain intelligence** — insights no single-domain app can provide.
+Personal AI assistant for Indian users (28–35). Chat-first interface. 6 life domains: Money, Wealth, Career, Health, Mind, Time. Connects to 4 brokers (Zerodha, Angel One, Upstox, Fyers), Gmail, bank SMS, health data, mutual funds. The moat is **cross-domain intelligence** — insights no single-domain app can provide.
 
 Backend: Node.js + Express. Mobile: React Native + Expo (Android-first). AI: OpenAI GPT-4o-mini with 21+ tools.
 
@@ -130,9 +129,6 @@ D:\OPENCLAW CHANDAN\
 │   │   │   ├── angelone.js        ← Angel One SmartAPI TOTP auth. Token expiry → auto-clear.
 │   │   │   ├── upstox.js          ← ✅ Upstox OAuth2 + upstox-js-sdk + token storage
 │   │   │   ├── fyers.js           ← ✅ Fyers OAuth2 + fyers-api-v3 + token storage
-│   │   │   ├── dhan.js            ← ✅ Dhan token auth + dhanhq + holdings
-│   │   │   ├── fivepaisa.js       ← ✅ 5paisa TOTP + 5paisa-ts-sdk + token storage
-│   │   │   ├── groww.js           ← ⬜ Groww Trade API — API Key + Secret auth + holdings
 │   │   │   ├── gmail.js           ← Google OAuth2, fetchEmails(), searchEmails()
 │   │   │   ├── calendar.js        ← Google Calendar OAuth2, schedule, free slots (Kaal agent)
 │   │   │   ├── cas.js             ← POST /api/cas/upload — CASParser MF integration
@@ -142,7 +138,7 @@ D:\OPENCLAW CHANDAN\
 │   │   │   ├── career.js          ← Resume parse, job scoring (ApplyPilot pattern), tracker
 │   │   │   ├── health.js          ← Health sync + spending correlation (Arogya agent)
 │   │   │   ├── workflows.js       ← GET /api/workflows, POST /trigger/:name, notifications CRUD
-│   │   │   └── whatsapp.js        ← DEFERRED — build last
+│   │   │   └── drive.js           ← Google Drive OAuth2 + file listing + AI analysis
 │   │   ├── workflows/
 │   │   │   ├── engine.js          ← WorkflowGraph (DeerFlow2 pattern): nodes, edges, state, retry
 │   │   │   ├── index.js           ← Registers all workflows + exports runWorkflow, scheduler, notifications
@@ -244,25 +240,25 @@ User types message
 4. Mobile: add broker logo/connect button in ChatScreen status bar
 > broker adapter auto-merges new broker into portfolio — no executor.js changes needed
 
-## Broker Integration Plan (7 Brokers → ~72% coverage)
-| # | Broker | API | Auth | Cost | Status | Priority |
-|---|--------|-----|------|------|--------|----------|
-| 1 | **Zerodha** | KiteConnect | OAuth2 + request_token | Rs 2000/mo | ✅ Built + Tested | — |
-| 2 | **Angel One** | SmartAPI | Client ID + MPIN + TOTP | Free | ✅ Built + Tested | — |
-| 3 | **Upstox** | Upstox API v2 | OAuth2 | Free | ✅ Built | Account deactivated |
-| 4 | **Fyers** | Fyers API v3 | OAuth2 | Free | ✅ Built + Tested | — |
-| 5 | **Dhan** | DhanHQ API | Access Token | Free | ✅ Built | Not tested yet |
-| 6 | **5paisa** | 5paisa API | OAuth2 + TOTP | Free | ✅ Built | Not tested yet |
-| 7 | **Groww** | Groww Trade API | API Key + Secret | Rs 499/mo | ⬜ Building | — |
+## Broker Integration Plan (4 OAuth-Scalable Brokers)
+| # | Broker | API | Auth | Cost | Status |
+|---|--------|-----|------|------|--------|
+| 1 | **Zerodha** | KiteConnect | OAuth2 + request_token | Rs 2000/mo | ✅ Built + Tested |
+| 2 | **Angel One** | SmartAPI | Client ID + MPIN + TOTP | Free | ✅ Built + Tested |
+| 3 | **Upstox** | Upstox API v2 | OAuth2 | Free | ✅ Built (account deactivated) |
+| 4 | **Fyers** | Fyers API v3 | OAuth2 | Free | ✅ Built + Tested |
+
+**Removed brokers (non-scalable — require per-user API keys/subscriptions):**
+- Groww (₹499/mo per user), Dhan (per-user token), 5paisa (per-user TOTP)
+- For millions of users, plan to integrate **Account Aggregator (AA) framework** (Finvu/OneMoney/Perfios)
 
 ### API Docs & SDKs
 | Broker | API Docs | npm/SDK | Auth Flow |
 |--------|----------|---------|-----------|
+| Zerodha | kite.trade | `kiteconnect` | OAuth2 → request_token → access_token |
+| Angel One | smartapi.angelone.in | `smartapi-javascript` | Client ID + MPIN + TOTP → jwtToken |
 | Upstox | developer.upstox.com | `upstox-js-sdk` | OAuth2 → access_token → REST/WebSocket |
 | Fyers | myapi.fyers.in/docsv3 | `fyers-api-v3` | OAuth2 → access_token → REST/WebSocket |
-| Dhan | dhanhq.co/docs | `dhanhq` | API key + access_token from login |
-| 5paisa | developer.5paisa.com | `5paisa-js` | OAuth2 + TOTP → request_token → REST |
-| Groww | groww.in/trade-api/docs | REST only (no Node SDK) | API Key + Secret → Bearer token → REST |
 
 ### Angel One Auth Notes
 - `generateSession(clientId, mpin, totp)` — password field = MPIN (4 digits), NOT login password
@@ -271,10 +267,10 @@ User types message
 
 ### Per-Broker File Pattern
 ```
+backend/src/routes/zerodha.js     ← OAuth + token storage + getHoldings()
+backend/src/routes/angelone.js    ← SmartAPI TOTP + token storage + getHoldings()
 backend/src/routes/upstox.js      ← OAuth + token storage + getHoldings()
 backend/src/routes/fyers.js       ← OAuth + token storage + getHoldings()
-backend/src/routes/dhan.js        ← Token auth + getHoldings()
-backend/src/routes/fivepaisa.js   ← OAuth + TOTP + getHoldings()
 ```
 Each route file: OAuth/auth flow → store tokens in `connected_apps` → export getHoldings().
 Each broker gets ONE entry in `brokers/index.js` adapters array. That's it.
@@ -500,8 +496,8 @@ Full architecture doc: `docs/ARCHITECTURE.md`
 - Do NOT store raw financial data in DB — fetch live every time
 - Do NOT store raw SMS body — only parsed amount + merchant + date
 - Do NOT hardcode API keys — always use `.env`
-- Groww now has a public API (groww.in/trade-api, Rs 499/mo) — integration is being built in `routes/groww.js`
-- Do NOT integrate brokers outside the 6 planned (Zerodha, Angel One, Upstox, Fyers, Dhan, 5paisa) without discussion
+- Do NOT integrate brokers outside the 4 planned (Zerodha, Angel One, Upstox, Fyers) — Groww/Dhan/5paisa removed (non-scalable per-user key model)
+- Do NOT build WhatsApp integration — removed from scope
 - Do NOT edit `android/` folder manually — it's generated by `expo prebuild`
 - Do NOT call Supabase directly in routes — use `repositories/index.js`
 - Do NOT add broker logic to executor.js — use `brokers/index.js` adapter
@@ -524,12 +520,6 @@ UPSTOX_API_KEY=
 UPSTOX_API_SECRET=
 FYERS_APP_ID=
 FYERS_SECRET_ID=
-DHAN_CLIENT_ID=
-DHAN_ACCESS_TOKEN=
-FIVEPAISA_APP_NAME=
-FIVEPAISA_APP_SOURCE=
-FIVEPAISA_USER_KEY=
-FIVEPAISA_ENCRYPTION_KEY=
 CASPARSER_API_KEY=sandbox-with-json-responses
 PORT=3000
 JWT_SECRET=             ← generate with: node -e "require('crypto').randomBytes(32).toString('hex')" | copy to Railway too
@@ -547,11 +537,11 @@ Full plan in `docs/VISION.md`. Summary:
 3. Mobile build stable on real device + fix input bar
 4. End-to-end test: message → AI response on phone
 
-### Days 3-4: Broker Blitz
-5. Upstox OAuth2 + adapter (P0)
-6. Fyers OAuth2 + adapter (P1)
-7. Dhan token auth + adapter (P1)
-8. 5paisa OAuth+TOTP + adapter (P2)
+### Days 3-4: Security + Broker Polish
+5. Fix critical auth bypass (SECURITY_CRITICALS.md #1) ← **BLOCKER**
+6. Fix Fyers OAuth state bypass + Upstox singleton race condition
+7. All 4 brokers tested end-to-end ✅ (Zerodha, Angel One, Fyers confirmed; Upstox blocked by deactivated account)
+8. ~~Dhan, 5paisa, Groww~~ REMOVED — non-scalable per-user key model
 
 ### Days 5-6: Cross-Domain Intelligence (THE MAGIC)
 9. Sunday Briefing — weekly report across all 6 life domains
