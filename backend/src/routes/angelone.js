@@ -51,7 +51,7 @@ router.post('/connect', async (req, res) => {
     ]);
 
     if (!session.data?.jwtToken) {
-      return res.status(401).json({ error: 'Angel One login failed', response: session });
+      return res.status(401).json({ error: 'Angel One login failed. Check your credentials.' });
     }
 
     const token = session.data.jwtToken;
