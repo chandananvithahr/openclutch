@@ -77,9 +77,10 @@ router.get('/callback', async (req, res) => {
   if (valid && stateUserId) {
     userId = stateUserId;
   } else {
-    userId = req.query.userId || req.userId || 'default';
+    userId = req.query.userId || req.userId;
   }
 
+  if (!userId) return res.status(403).send('userId missing — add ?userId=test123 to your login URL');
   if (!auth_code) return res.status(400).send('Missing auth_code from Fyers');
 
   try {
