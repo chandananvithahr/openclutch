@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenClutch — Your Life's Control Room</title>
+  <meta name="description" content="One AI that knows your money, career, health, and mood — and connects the dots between them. Built for India.">
+  <style>
+    :root {
+      --bg:       #2D1B14;
+      --card:     #3A2820;
+      --accent:   #FFE36D;
+      --success:  #4CAF50;
+      --text:     #F5F0EB;
+      --muted:    #B8A99A;
+      --border:   #6B4C3A;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ─── Nav ─── */
+    nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 5%;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .logo {
+      font-size: 1.4rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+    .logo span { color: var(--accent); }
+    nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.2s;
+    }
+    nav a:hover { color: var(--text); }
+
+    /* ─── Hero ─── */
+    .hero {
+      max-width: 800px;
+      margin: 80px auto 0;
+      padding: 0 5%;
+      text-align: center;
+    }
+    .hero h1 {
+      font-size: clamp(2.2rem, 5vw, 3.6rem);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -1px;
+      margin-bottom: 24px;
+    }
+    .hero h1 em {
+      font-style: normal;
+      color: var(--accent);
+    }
+    .hero p {
+      font-size: 1.15rem;
+      color: var(--muted);
+      max-width: 600px;
+      margin: 0 auto 40px;
+      line-height: 1.7;
+    }
+    .hero-cta {
+      display: inline-block;
+      background: var(--accent);
+      color: var(--bg);
+      font-weight: 700;
+      font-size: 1.1rem;
+      padding: 16px 40px;
+      border-radius: 14px;
+      text-decoration: none;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .hero-cta:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(255, 227, 109, 0.25);
+    }
+
+    /* ─── The Problem ─── */
+    .problem {
+      max-width: 900px;
+      margin: 120px auto 0;
+      padding: 0 5%;
+    }
+    .problem h2 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-bottom: 32px;
+      text-align: center;
+    }
+    .problem-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .problem-card {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 24px;
+      border-left: 3px solid var(--border);
+    }
+    .problem-card .app-name {
+      color: var(--muted);
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .problem-card p {
+      font-size: 0.95rem;
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    /* ─── The Difference ─── */
+    .difference {
+      max-width: 900px;
+      margin: 100px auto 0;
+      padding: 0 5%;
+      text-align: center;
+    }
+    .difference h2 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .difference .subtitle {
+      color: var(--muted);
+      margin-bottom: 48px;
+      font-size: 1.05rem;
+    }
+
+    /* ─── Chat Examples ─── */
+    .chat-examples {
+      max-width: 600px;
+      margin: 0 auto;
+      text-align: left;
+    }
+    .chat-bubble {
+      background: var(--card);
+      border-radius: 18px;
+      padding: 18px 22px;
+      margin-bottom: 16px;
+      position: relative;
+      border-left: 3px solid var(--accent);
+    }
+    .chat-bubble .label {
+      font-size: 0.75rem;
+      color: var(--accent);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .chat-bubble p {
+      font-size: 0.95rem;
+      line-height: 1.6;
+      color: var(--text);
+    }
+    .chat-bubble .domains {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .domain-tag {
+      background: rgba(255, 227, 109, 0.12);
+      color: var(--accent);
+      font-size: 0.72rem;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-weight: 600;
+    }
+
+    /* ─── 6 Agents ─── */
+    .agents {
+      max-width: 1000px;
+      margin: 120px auto 0;
+      padding: 0 5%;
+    }
+    .agents h2 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    .agents-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+    .agent-card {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 28px;
+      transition: transform 0.2s;
+    }
+    .agent-card:hover { transform: translateY(-4px); }
+    .agent-card .emoji { font-size: 2rem; margin-bottom: 12px; }
+    .agent-card h3 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .agent-card .agent-name {
+      color: var(--accent);
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .agent-card p {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    /* ─── Holy Shit Section ─── */
+    .features {
+      max-width: 800px;
+      margin: 120px auto 0;
+      padding: 0 5%;
+    }
+    .features h2 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    .feature-block {
+      margin-bottom: 48px;
+    }
+    .feature-block h3 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: var(--accent);
+    }
+    .feature-block .example {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 20px;
+      font-size: 0.95rem;
+      line-height: 1.7;
+      color: var(--text);
+      border-left: 3px solid var(--accent);
+    }
+
+    /* ─── Stack ─── */
+    .stack {
+      max-width: 700px;
+      margin: 120px auto 0;
+      padding: 0 5%;
+      text-align: center;
+    }
+    .stack h2 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-bottom: 32px;
+    }
+    .stack-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+    }
+    .stack-tag {
+      background: var(--card);
+      padding: 8px 18px;
+      border-radius: 24px;
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    /* ─── CTA ─── */
+    .final-cta {
+      text-align: center;
+      margin: 120px auto 80px;
+      padding: 0 5%;
+    }
+    .final-cta h2 {
+      font-size: 2rem;
+      font-weight: 800;
+      margin-bottom: 16px;
+    }
+    .final-cta p {
+      color: var(--muted);
+      margin-bottom: 32px;
+      font-size: 1.05rem;
+    }
+
+    /* ─── Footer ─── */
+    footer {
+      text-align: center;
+      padding: 40px 5%;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+
+    /* ─── Mobile ─── */
+    @media (max-width: 600px) {
+      .hero { margin-top: 48px; }
+      .problem, .difference, .agents, .features, .stack, .final-cta { margin-top: 80px; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="logo">Open<span>Clutch</span></div>
+    <div>
+      <a href="https://github.com/chandanXP/openclutch" target="_blank">GitHub</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <h1>Your life's <em>control room</em>. One AI that connects <em>everything</em>.</h1>
+    <p>Money. Career. Health. Mood. Calendar. OpenClutch is the AI that knows all six domains of your life — and finds the patterns between them that no single app can see.</p>
+    <a href="#features" class="hero-cta">See what it does</a>
+  </section>
+
+  <!-- The Problem -->
+  <section class="problem">
+    <h2>Your apps don't talk to each other</h2>
+    <div class="problem-grid">
+      <div class="problem-card">
+        <div class="app-name">Zerodha</div>
+        <p>Doesn't know you're stressed and about to panic-sell.</p>
+      </div>
+      <div class="problem-card">
+        <div class="app-name">Google Fit</div>
+        <p>Doesn't know you spend 2x more on days you sleep under 6 hours.</p>
+      </div>
+      <div class="problem-card">
+        <div class="app-name">LinkedIn</div>
+        <p>Doesn't know your portfolio crashed and you should NOT quit right now.</p>
+      </div>
+      <div class="problem-card">
+        <div class="app-name">CRED</div>
+        <p>Doesn't know your Swiggy spend spikes every time you journal "lonely."</p>
+      </div>
+      <div class="problem-card">
+        <div class="app-name">Your Bank App</div>
+        <p>Doesn't know your salary was 4 days late versus the usual pattern.</p>
+      </div>
+      <div class="problem-card">
+        <div class="app-name">Google Calendar</div>
+        <p>Doesn't know 3 meetings + 2 deadlines + no exercise in 5 days = burnout incoming.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- The Difference -->
+  <section class="difference" id="features">
+    <h2>OpenClutch sees what they can't</h2>
+    <p class="subtitle">Cross-domain intelligence. That's the entire moat.</p>
+
+    <div class="chat-examples">
+      <div class="chat-bubble">
+        <div class="label">Sunday Briefing</div>
+        <p>This week: earned 1.2L, spent 38K (12K food — way too much Swiggy). Portfolio up 2.3%. Avg sleep 5.8hrs. Journaled 'frustrated' twice. One reply from Flipkart — interview Tuesday.</p>
+        <div class="domains">
+          <span class="domain-tag">Money</span>
+          <span class="domain-tag">Wealth</span>
+          <span class="domain-tag">Health</span>
+          <span class="domain-tag">Mind</span>
+          <span class="domain-tag">Career</span>
+        </div>
+      </div>
+
+      <div class="chat-bubble">
+        <div class="label">Pattern Alert</div>
+        <p>You spend 65% more on days you sleep under 6 hours. This month, that's 4 days — costing you an extra Rs 8,200.</p>
+        <div class="domains">
+          <span class="domain-tag">Health</span>
+          <span class="domain-tag">Money</span>
+        </div>
+      </div>
+
+      <div class="chat-bubble">
+        <div class="label">You asked: "Should I buy an iPhone 16?"</div>
+        <p>You have 2.1L savings, 45K monthly expenses, next SIP in 4 days. Emergency fund: 2.8 months (target: 6). Wait 3 months — bonus cycle is June. Or go 128GB at 79K.</p>
+        <div class="domains">
+          <span class="domain-tag">Money</span>
+          <span class="domain-tag">Wealth</span>
+        </div>
+      </div>
+
+      <div class="chat-bubble">
+        <div class="label">Stealth Insight</div>
+        <p>Uber spend tripled this month vs last. Did you move further from office, or are you avoiding the metro?</p>
+        <div class="domains">
+          <span class="domain-tag">Money</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 Agents -->
+  <section class="agents">
+    <h2>6 AI agents. 6 life domains.</h2>
+    <div class="agents-grid">
+      <div class="agent-card">
+        <div class="emoji">💰</div>
+        <h3>Money</h3>
+        <div class="agent-name">Artha</div>
+        <p>Tracks spending from bank SMS + Gmail. Detects salary, categorizes expenses, calculates daily budgets.</p>
+      </div>
+      <div class="agent-card">
+        <div class="emoji">📈</div>
+        <h3>Wealth</h3>
+        <div class="agent-name">Vriddhi</div>
+        <p>Connects to Zerodha, Angel One, Upstox, Fyers. Merges portfolios. Tracks P&L, mutual funds, net worth.</p>
+      </div>
+      <div class="agent-card">
+        <div class="emoji">🚀</div>
+        <h3>Career</h3>
+        <div class="agent-name">Karma</div>
+        <p>Parses your resume, scores job fits, preps for interviews, runs salary negotiation scripts.</p>
+      </div>
+      <div class="agent-card">
+        <div class="emoji">💪</div>
+        <h3>Health</h3>
+        <div class="agent-name">Arogya</div>
+        <p>Syncs steps, sleep, and heart rate from any wearable. Correlates health with spending patterns.</p>
+      </div>
+      <div class="agent-card">
+        <div class="emoji">🧠</div>
+        <h3>Mind</h3>
+        <div class="agent-name">Chitta</div>
+        <p>Daily journal with mood detection. Surfaces patterns: stress triggers, emotional spending loops.</p>
+      </div>
+      <div class="agent-card">
+        <div class="emoji">🕐</div>
+        <h3>Time</h3>
+        <div class="agent-name">Kaal</div>
+        <p>Calendar awareness. Knows your meeting load, free slots, and when you're overbooked.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features">
+    <h2>What makes people say "holy shit"</h2>
+
+    <div class="feature-block">
+      <h3>The Sunday Briefing</h3>
+      <div class="example">
+        Every Sunday at 9am, an AI-written weekly report across all 6 domains. Not a dashboard — a conversation. With real numbers from your real life.
+      </div>
+    </div>
+
+    <div class="feature-block">
+      <h3>Cross-Domain Patterns</h3>
+      <div class="example">
+        "You check your portfolio 3x more on days you journal about work stress."<br>
+        "Last 3 times markets dropped 2%+, you panic-sold within 48 hours."<br>
+        "Every time you order food after 11pm, you skip your morning walk."
+      </div>
+    </div>
+
+    <div class="feature-block">
+      <h3>The "Can I Afford This?" Engine</h3>
+      <div class="example">
+        Ask "Can I afford a PS5?" and get an answer using your actual salary, spending rate, EMIs, portfolio value, and emergency fund status. Not generic advice — your numbers.
+      </div>
+    </div>
+
+    <div class="feature-block">
+      <h3>Stealth Insights</h3>
+      <div class="example">
+        Proactive notifications you never asked for. "Haven't invested in 45 days — auto-SIP still running?" or "3 subscription charges failed — check bank balance."
+      </div>
+    </div>
+  </section>
+
+  <!-- Stack -->
+  <section class="stack">
+    <h2>Built with</h2>
+    <div class="stack-tags">
+      <span class="stack-tag">Node.js + Express</span>
+      <span class="stack-tag">React Native + Expo</span>
+      <span class="stack-tag">OpenAI GPT-4o-mini</span>
+      <span class="stack-tag">Supabase (Postgres + RLS)</span>
+      <span class="stack-tag">29 AI Tools</span>
+      <span class="stack-tag">4 Broker APIs</span>
+      <span class="stack-tag">DeerFlow2 Workflows</span>
+      <span class="stack-tag">Railway</span>
+    </div>
+  </section>
+
+  <!-- Final CTA -->
+  <section class="final-cta">
+    <h2>The guide you never had.</h2>
+    <p>Built for Indians aged 28-35 who want one place to understand their entire life.</p>
+    <a href="https://github.com/chandanXP/openclutch" class="hero-cta" target="_blank">View on GitHub</a>
+  </section>
+
+  <footer>
+    <p>OpenClutch is open source. Built by <a href="https://github.com/chandanXP">Chandan</a> with Claude Code.</p>
+  </footer>
+
+</body>
+</html>
