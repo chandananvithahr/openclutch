@@ -3,12 +3,10 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') }
 
 // Fail fast — dns.toys pattern: crash at startup if required keys are missing
 const REQUIRED_ENV = ['OPENAI_API_KEY', 'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'JWT_SECRET'];
-for (const key of REQUIRED_ENV) {
-  if (!process.env[key]) {
-    // Use console.error here — logger not yet importable (circular dep risk)
-    console.error(`[FATAL] Missing required env var: ${key}. Check your .env file.`);
-    process.exit(1);
-  }
+const MISSING_ENV = REQUIRED_ENV.filter(k => !process.env[k]);
+if (MISSING_ENV.length > 0) {
+  console.error(`[FATAL] Missing required env vars: ${MISSING_ENV.join(', ')}`);
+  process.exit(1);
 }
 
 const express           = require('express');
