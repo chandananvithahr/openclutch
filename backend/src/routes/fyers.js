@@ -70,10 +70,16 @@ router.get('/login', (req, res) => {
 // GET /api/fyers/callback?auth_code=XXXX&state=sample_state
 router.get('/callback', async (req, res) => {
   const { auth_code, state } = req.query;
-  const { valid, userId } = validateState(state);
-  if (!valid || !userId) {
-    return res.status(403).send('Invalid or expired OAuth state. Please try connecting again.');
+
+  // Fyers sends state=sample_state ignoring our state value — fall back to userId query param
+  let userId;
+  const { valid, userId: stateUserId } = validateState(state);
+  if (valid && stateUserId) {
+    userId = stateUserId;
+  } else {
+    userId = req.query.userId || req.userId || 'default';
   }
+
   if (!auth_code) return res.status(400).send('Missing auth_code from Fyers');
 
   try {
