@@ -1,11 +1,11 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
+import { colors, spacing, radius, typography, financial } from '../styles/theme';
 
 export default function PortfolioChart({ data }) {
-  // useWindowDimensions re-renders correctly on rotation / split-screen / foldables
   const { width: screenWidth } = useWindowDimensions();
-  const chartWidth = screenWidth - 80; // account for avatar + padding
+  const chartWidth = screenWidth - 80;
 
   if (
     !data ||
@@ -21,10 +21,8 @@ export default function PortfolioChart({ data }) {
 
   const isPositive = data.total_pnl >= 0;
 
-  // Derive label stride from data length so labels never crowd or go sparse
   const labelStride = Math.max(1, Math.ceil(data.labels.length / 4));
 
-  // Build data points for gifted-charts LineChart
   const points = data.values.map((v, i) => ({
     value: v,
     label: i % labelStride === 0 ? data.labels[i] : '',
@@ -41,13 +39,12 @@ export default function PortfolioChart({ data }) {
     return `₹${Math.round(num)}`;
   };
 
-  // Memoize pointerConfig to avoid re-creating on every FlatList scroll render
   const pointerConfig = useMemo(() => ({
     pointerStripUptoDataPoint: true,
-    pointerStripColor: '#6C63FF',
+    pointerStripColor: colors.primary,
     pointerStripWidth: 1,
     strokeDashArray: [4, 2],
-    pointerColor: '#6C63FF',
+    pointerColor: colors.primary,
     radius: 5,
     pointerLabelWidth: 80,
     pointerLabelHeight: 40,
@@ -60,12 +57,10 @@ export default function PortfolioChart({ data }) {
     ),
   }), []);
 
-  // spacing: keep all points within chartWidth bounds
-  const spacing = Math.floor(chartWidth / Math.max(points.length, 2));
+  const chartSpacing = Math.floor(chartWidth / Math.max(points.length, 2));
 
   return (
     <View style={styles.container}>
-      {/* Summary row */}
       <View style={styles.summaryRow}>
         <View>
           <Text style={styles.label}>Current Value</Text>
@@ -79,15 +74,14 @@ export default function PortfolioChart({ data }) {
         </View>
       </View>
 
-      {/* Line chart */}
       <View style={styles.chartContainer}>
         <LineChart
           data={points}
           width={chartWidth}
           height={120}
-          color={isPositive ? '#22c55e' : '#ef4444'}
+          color={isPositive ? colors.gain : colors.loss}
           thickness={2}
-          startFillColor={isPositive ? '#22c55e' : '#ef4444'}
+          startFillColor={isPositive ? colors.gain : colors.loss}
           endFillColor="transparent"
           startOpacity={0.25}
           endOpacity={0}
@@ -95,14 +89,14 @@ export default function PortfolioChart({ data }) {
           curved
           hideDataPoints
           hideYAxisText
-          xAxisColor="#e0e0e0"
-          rulesColor="#f0f0f0"
+          xAxisColor={colors.border}
+          rulesColor={colors.bgSubtle}
           noOfSections={3}
           maxValue={maxVal * 1.05}
           minValue={minVal * 0.95}
           yAxisLabelWidth={0}
           xAxisLabelTextStyle={styles.xLabel}
-          spacing={spacing}
+          spacing={chartSpacing}
           initialSpacing={4}
           endSpacing={4}
           backgroundColor="transparent"
@@ -117,32 +111,37 @@ export default function PortfolioChart({ data }) {
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 10,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
+    marginTop: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: colors.border,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
-  label: { fontSize: 11, color: '#888', marginBottom: 2 },
-  currentValue: { fontSize: 18, fontWeight: '700', color: '#1a1a1a' },
+  label: { fontSize: typography.xs, color: colors.textMuted, marginBottom: 2 },
+  currentValue: {
+    fontSize: typography.lg,
+    fontWeight: typography.bold,
+    color: colors.text,
+    ...financial.amountStyle,
+  },
   pnlBox: { alignItems: 'flex-end' },
-  pnl: { fontSize: 14, fontWeight: '600' },
-  positive: { color: '#22c55e' },
-  negative: { color: '#ef4444' },
+  pnl: { fontSize: typography.sm + 1, fontWeight: typography.semibold, ...financial.amountStyle },
+  positive: { color: colors.gain },
+  negative: { color: colors.loss },
   chartContainer: { marginHorizontal: -4 },
-  xLabel: { fontSize: 9, color: '#aaa' },
+  xLabel: { fontSize: 9, color: colors.textFaint },
   tooltipBox: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 6,
+    backgroundColor: colors.bgSubtle,
+    borderRadius: radius.sm,
     padding: 4,
     paddingHorizontal: 6,
   },
-  tooltipText: { color: '#fff', fontSize: 11, fontWeight: '600' },
-  footnote: { fontSize: 10, color: '#bbb', textAlign: 'right', marginTop: 4 },
+  tooltipText: { color: colors.text, fontSize: typography.xs, fontWeight: typography.semibold },
+  footnote: { fontSize: 10, color: colors.textFaint, textAlign: 'right', marginTop: spacing.xs },
 });

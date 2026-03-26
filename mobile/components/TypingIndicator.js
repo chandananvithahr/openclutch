@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Animated, StyleSheet } from 'react-native';
+import { colors, spacing, radius, typography } from '../styles/theme';
 
 export default function TypingIndicator() {
   const dot1 = useRef(new Animated.Value(0)).current;
@@ -39,16 +40,19 @@ export default function TypingIndicator() {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 12, marginVertical: 6 },
-  avatar: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: '#6C63FF', justifyContent: 'center',
-    alignItems: 'center', marginRight: 8,
+  row: {
+    flexDirection: 'row', alignItems: 'flex-end',
+    paddingHorizontal: spacing.md, marginVertical: spacing.sm,
   },
-  avatarText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
+  avatar: {
+    width: 28, height: 28, borderRadius: radius.full,
+    backgroundColor: colors.primary, justifyContent: 'center',
+    alignItems: 'center', marginRight: spacing.sm,
+  },
+  avatarText: { color: colors.bg, fontWeight: typography.bold, fontSize: typography.sm },
   bubble: {
-    flexDirection: 'row', backgroundColor: '#F0F0F0',
+    flexDirection: 'row', backgroundColor: colors.surface,
     padding: 14, borderRadius: 18, borderBottomLeftRadius: 4, gap: 4,
   },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#999' },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.textMuted },
 });

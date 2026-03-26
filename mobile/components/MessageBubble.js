@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   iconText: {
-    color: '#fff',
+    color: colors.bg,
     fontWeight: typography.bold,
     fontSize: typography.sm,
   },

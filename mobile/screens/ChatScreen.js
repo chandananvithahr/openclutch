@@ -353,7 +353,7 @@ export default function ChatScreen() {
             value={input}
             onChangeText={setInput}
             placeholder="Message Clutch..."
-            placeholderTextColor="#999"
+            placeholderTextColor={colors.textMuted}
             multiline
             maxLength={500}
             onContentSizeChange={handleContentSizeChange}
@@ -454,7 +454,7 @@ export default function ChatScreen() {
             <TextInput
               style={styles.credInput}
               placeholder="Client ID (e.g. A123456)"
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.textMuted}
               value={angelCreds.clientId}
               onChangeText={v => setAngelCreds(p => ({ ...p, clientId: v }))}
               autoCapitalize="characters"
@@ -462,7 +462,7 @@ export default function ChatScreen() {
             <TextInput
               style={styles.credInput}
               placeholder="Password"
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.textMuted}
               value={angelCreds.password}
               onChangeText={v => setAngelCreds(p => ({ ...p, password: v }))}
               secureTextEntry
@@ -470,7 +470,7 @@ export default function ChatScreen() {
             <TextInput
               style={styles.credInput}
               placeholder="TOTP (6-digit code)"
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.textMuted}
               value={angelCreds.totp}
               onChangeText={v => setAngelCreds(p => ({ ...p, totp: v }))}
               keyboardType="numeric"
@@ -511,11 +511,11 @@ const styles = StyleSheet.create({
   headerRight: { flexDirection: 'row', alignItems: 'center' },
   notifBadge: {
     position: 'absolute', top: 4, right: 4,
-    backgroundColor: '#ef4444', borderRadius: 8,
+    backgroundColor: colors.offline, borderRadius: 8,
     minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center',
     paddingHorizontal: 3,
   },
-  notifBadgeText: { color: '#fff', fontSize: 9, fontWeight: '700' },
+  notifBadgeText: { color: colors.text, fontSize: 9, fontWeight: '700' },
   notifModalBox: {
     backgroundColor: colors.bg, borderRadius: radius.lg,
     padding: spacing.xl, width: '100%', maxWidth: 360, maxHeight: '80%',
@@ -577,7 +577,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.text, justifyContent: 'center', alignItems: 'center',
   },
   sendBtnDisabled: { backgroundColor: colors.textMuted },
-  sendIcon: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  sendIcon: { color: colors.bg, fontSize: 18, fontWeight: 'bold' },
 
   // ===== TONE PICKER =====
   modalOverlay: {
@@ -619,6 +619,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary, borderRadius: radius.md,
     paddingVertical: 14, alignItems: 'center', marginTop: 4, marginBottom: spacing.md,
   },
-  credSubmitText: { color: '#fff', fontWeight: typography.bold, fontSize: typography.base },
+  credSubmitText: { color: colors.bg, fontWeight: typography.bold, fontSize: typography.base },
   credCancelText: { textAlign: 'center', color: colors.textMuted, fontSize: typography.sm, paddingVertical: 4 },
 });
