@@ -173,16 +173,16 @@ async function getHealthSpendingCorrelation(userId, days = 30) {
     const food = foodSpending[h.entry_date] || 0;
 
     if (h.sleep_hours && h.sleep_hours < 6) {
-      badSleepDays.push({ date: h.entry_date, sleep: h.sleep_hours, spending: spend, food_delivery: food });
+      badSleepDays.push({ date: config.formatDateIN(h.entry_date), sleep: h.sleep_hours, spending: spend, food_delivery: food });
     }
     if (h.sleep_hours && h.sleep_hours >= 7) {
-      goodSleepDays.push({ date: h.entry_date, sleep: h.sleep_hours, spending: spend, food_delivery: food });
+      goodSleepDays.push({ date: config.formatDateIN(h.entry_date), sleep: h.sleep_hours, spending: spend, food_delivery: food });
     }
     if (h.steps && h.steps < 4000) {
-      lowStepDays.push({ date: h.entry_date, steps: h.steps, spending: spend, food_delivery: food });
+      lowStepDays.push({ date: config.formatDateIN(h.entry_date), steps: h.steps, spending: spend, food_delivery: food });
     }
     if (h.steps && h.steps >= 8000) {
-      activeStepDays.push({ date: h.entry_date, steps: h.steps, spending: spend, food_delivery: food });
+      activeStepDays.push({ date: config.formatDateIN(h.entry_date), steps: h.steps, spending: spend, food_delivery: food });
     }
   }
 

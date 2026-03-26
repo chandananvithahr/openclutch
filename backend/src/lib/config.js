@@ -96,4 +96,25 @@ module.exports = {
   CORS: {
     DEFAULT_ORIGINS: ['http://localhost:8081', 'http://127.0.0.1:8081', 'http://localhost:3000'],
   },
+
+  // Date formatting — Indian DD-MM-YYYY for all user-facing responses
+  // Database queries MUST still use YYYY-MM-DD (PostgreSQL ISO format)
+  formatDateIN(isoDate) {
+    if (!isoDate) return null;
+    const str = typeof isoDate === 'string' ? isoDate : isoDate.toISOString().slice(0, 10);
+    const [y, m, d] = str.split('-');
+    return `${d}-${m}-${y}`;
+  },
+
+  // Convert DD-MM-YYYY back to YYYY-MM-DD for DB queries
+  parseDateIN(indianDate) {
+    if (!indianDate) return null;
+    const [d, m, y] = indianDate.split('-');
+    return `${y}-${m}-${d}`;
+  },
+
+  // Today as DD-MM-YYYY
+  todayIN() {
+    return this.formatDateIN(new Date().toISOString().slice(0, 10));
+  },
 };

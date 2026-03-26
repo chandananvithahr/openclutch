@@ -312,7 +312,7 @@ async function getWeeklyReview(userContext) {
   const biggest = thisWeekData.sort((a, b) => b.amount - a.amount)[0];
 
   return {
-    period: `${weekAgo.toISOString().slice(0, 10)} to ${today.toISOString().slice(0, 10)}`,
+    period: `${config.formatDateIN(weekAgo)} to ${config.formatDateIN(today)}`,
     this_week_total: parseFloat(thisTotal.toFixed(2)),
     last_week_total: parseFloat(lastTotal.toFixed(2)),
     change_percent: parseFloat(changePercent.toFixed(1)),
@@ -321,7 +321,7 @@ async function getWeeklyReview(userContext) {
     transaction_count: thisWeekData.length,
     top_categories: topCategories,
     top_merchants: topMerchants,
-    biggest_transaction: biggest ? { merchant: biggest.merchant, amount: biggest.amount, date: biggest.txn_date } : null,
+    biggest_transaction: biggest ? { merchant: biggest.merchant, amount: biggest.amount, date: config.formatDateIN(biggest.txn_date) } : null,
   };
 }
 
@@ -358,7 +358,7 @@ async function detectSalary(month, userContext) {
     return {
       salary_detected: true,
       amount: salary.amount,
-      date: salary.txn_date,
+      date: config.formatDateIN(salary.txn_date),
       bank: salary.bank,
       total_spent_this_month: parseFloat(totalSpent.toFixed(2)),
       remaining: parseFloat((salary.amount - totalSpent).toFixed(2)),

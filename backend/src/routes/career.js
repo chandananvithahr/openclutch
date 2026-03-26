@@ -229,7 +229,7 @@ async function trackJobApplication(company, role, status, userId) {
     company,
     role,
     status: status || 'applied',
-    applied_date: new Date().toISOString().slice(0, 10),
+    applied_date: new Date().toISOString().slice(0, 10), // stored as ISO in DB
   });
 
   if (error) return { error: error.message };

@@ -3,6 +3,7 @@ const router = express.Router();
 const { google } = require('googleapis');
 const repos = require('../repositories');
 const logger = require('../lib/logger');
+const config = require('../lib/config');
 const { generateState, validateState } = require('../lib/oauthState');
 
 const REDIRECT_URI = process.env.CALENDAR_REDIRECT_URI || 'http://127.0.0.1:3000/api/calendar/callback';
@@ -151,7 +152,7 @@ async function getTodaySchedule(userId) {
     }, 0);
 
   return {
-    date: startOfDay.toISOString().slice(0, 10),
+    date: config.formatDateIN(startOfDay.toISOString().slice(0, 10)),
     events,
     meeting_count: meetingCount,
     total_meeting_hours: parseFloat((totalMeetingMinutes / 60).toFixed(1)),
@@ -203,11 +204,17 @@ async function getUpcomingEvents(userId, days = 7) {
   const busiestDay = Object.entries(byDay)
     .sort((a, b) => b[1].length - a[1].length)[0];
 
+  // Convert ISO date keys to Indian DD-MM-YYYY for user-facing output
+  const eventsByDayIN = {};
+  for (const [isoDate, dayEvents] of Object.entries(byDay)) {
+    eventsByDayIN[config.formatDateIN(isoDate)] = dayEvents;
+  }
+
   return {
-    period: `${now.toISOString().slice(0, 10)} to ${future.toISOString().slice(0, 10)}`,
+    period: `${config.formatDateIN(now.toISOString().slice(0, 10))} to ${config.formatDateIN(future.toISOString().slice(0, 10))}`,
     total_events: events.length,
-    events_by_day: byDay,
-    busiest_day: busiestDay ? { date: busiestDay[0], event_count: busiestDay[1].length } : null,
+    events_by_day: eventsByDayIN,
+    busiest_day: busiestDay ? { date: config.formatDateIN(busiestDay[0]), event_count: busiestDay[1].length } : null,
   };
 }
 
@@ -261,7 +268,7 @@ async function getFreeSlots(userId) {
   }
 
   return {
-    date: now.toISOString().slice(0, 10),
+    date: config.formatDateIN(now.toISOString().slice(0, 10)),
     free_slots: freeSlots,
     total_free_hours: parseFloat((freeSlots.reduce((s, f) => s + f.duration_minutes, 0) / 60).toFixed(1)),
     meeting_count: schedule.meeting_count,

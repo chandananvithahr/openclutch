@@ -14,6 +14,7 @@ const repos                  = require('../repositories');
 const brokers                = require('../brokers');
 const logger                 = require('../lib/logger');
 const { chat }               = require('../lib/ai');
+const config                 = require('../lib/config');
 
 // ─── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -237,7 +238,7 @@ Keep it under 250 words. No bullet soup — write in short paragraphs. Be honest
   } catch (err) {
     logger.warn('weeklyReview:compose AI failed', { userId, err: err.message });
     // Fallback: structured summary without AI narrative
-    briefingText = `Week of ${weekRange?.start} — Spending Rs ${thisWeekSpend.toLocaleString('en-IN')} (${vsLastWeek > 0 ? '+' : ''}${vsLastWeek}% vs last week). Top: ${topCategory}.${healthAvailable ? ` Avg sleep ${avgSleep}h, ${avgSteps} steps/day.` : ''}`;
+    briefingText = `Week of ${config.formatDateIN(weekRange?.start)} — Spending Rs ${thisWeekSpend.toLocaleString('en-IN')} (${vsLastWeek > 0 ? '+' : ''}${vsLastWeek}% vs last week). Top: ${topCategory}.${healthAvailable ? ` Avg sleep ${avgSleep}h, ${avgSteps} steps/day.` : ''}`;
   }
 
   logger.info('weeklyReview:compose', { userId, briefingLength: briefingText.length });
