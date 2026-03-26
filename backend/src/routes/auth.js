@@ -15,8 +15,12 @@ const bcrypt   = require('bcryptjs');
 const { issueToken } = require('../middleware/auth');
 const logger   = require('../lib/logger');
 const { validate, signupSchema, loginSchema } = require('../lib/validation');
-const supabase = require('../lib/supabase');
+const supabaseModule = require('../lib/supabase');
 const { asyncHandler, HTTPError } = require('../middleware/errors');
+
+// Use service role client for auth operations — bypasses RLS (no user JWT exists yet).
+// Falls back to anon client if SUPABASE_SERVICE_ROLE_KEY not set (will fail RLS on insert).
+const db = supabaseModule.supabaseAdmin || supabaseModule;
 
 const BOOTSTRAP_SECRET = process.env.AUTH_BOOTSTRAP_SECRET;
 const BCRYPT_ROUNDS = 10;
@@ -59,7 +63,7 @@ router.post('/signup', asyncHandler(async (req, res) => {
   }
 
   // Check if email already exists (ignore RLS errors — treat as "no user found")
-  const { data: existing, error: checkError } = await supabase
+  const { data: existing, error: checkError } = await db
     .from('user_profiles')
     .select('user_id')
     .eq('email', body.email)
@@ -82,7 +86,7 @@ router.post('/signup', asyncHandler(async (req, res) => {
   const userId = `user_${body.email.replace(/[^a-z0-9]/gi, '_')}`;
 
   // Create user profile
-  const { error: insertError } = await supabase
+  const { error: insertError } = await db
     .from('user_profiles')
     .insert({
       user_id: userId,
@@ -125,7 +129,7 @@ router.post('/login', asyncHandler(async (req, res) => {
   }
 
   // Find user by email
-  const { data: user, error: findError } = await supabase
+  const { data: user, error: findError } = await db
     .from('user_profiles')
     .select('user_id, password_hash, name')
     .eq('email', body.email)
@@ -208,7 +212,7 @@ router.get('/ping', asyncHandler(async (req, res) => {
 
   // Step 2: supabase select from user_profiles
   try {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('user_profiles')
       .select('user_id')
       .eq('email', 'nonexistent@test.com')
@@ -237,7 +241,7 @@ router.get('/ping', asyncHandler(async (req, res) => {
     const { error: ie } = await Promise.race([insertPromise, timeoutPromise]);
     steps.supabase_insert = ie ? `error code=${ie.code} msg=${ie.message}` : 'ok';
     // Clean up test row
-    if (!ie) await supabase.from('user_profiles').delete().eq('user_id', 'test_diag_user');
+    if (!ie) await db.from('user_profiles').delete().eq('user_id', 'test_diag_user');
   } catch (e) {
     steps.supabase_insert = `THROW: ${e.message}`;
   }

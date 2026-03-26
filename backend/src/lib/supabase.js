@@ -1,5 +1,10 @@
-// Supabase client — enhanced from supabase-js source analysis
-// Adds: version header, typed error class, timeout guard, fail-fast validation
+// Supabase clients — enhanced from supabase-js source analysis
+// Two clients:
+//   supabase        — ANON key (default). RLS applies. Used for user-scoped queries.
+//   supabaseAdmin   — SERVICE ROLE key. Bypasses RLS. Used ONLY for auth operations
+//                     (signup, login) where there's no user JWT yet.
+//
+// NEVER expose supabaseAdmin to user-controlled input outside of auth routes.
 
 'use strict';
 
@@ -9,23 +14,31 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
   throw new Error('Missing SUPABASE_URL or SUPABASE_ANON_KEY. Check your .env file.');
 }
 
+const clientOptions = {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,         // Server-side: no session persistence
+  },
+  global: {
+    headers: {
+      'x-app-name': 'openclutch-backend',
+      'x-app-version': '1.0.0',
+    },
+  },
+  db: { schema: 'public' },
+};
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY,
-  {
-    auth: {
-      autoRefreshToken: true,
-      persistSession: false,       // Server-side: no session persistence
-    },
-    global: {
-      headers: {
-        'x-app-name': 'openclutch-backend',
-        'x-app-version': '1.0.0',
-      },
-    },
-    db: { schema: 'public' },
-  }
+  clientOptions
 );
+
+// Service role client — bypasses RLS. Only use for auth operations with no user context.
+// Requires SUPABASE_SERVICE_ROLE_KEY env var (from Supabase dashboard → Settings → API).
+const supabaseAdmin = process.env.SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, clientOptions)
+  : null;
 
 // Typed Supabase error — mirrors supabase-js AuthError hierarchy
 class SupabaseError extends Error {
@@ -44,5 +57,6 @@ function unwrap({ data, error }) {
 }
 
 module.exports = supabase;
+module.exports.supabaseAdmin = supabaseAdmin;
 module.exports.SupabaseError = SupabaseError;
 module.exports.unwrap = unwrap;
