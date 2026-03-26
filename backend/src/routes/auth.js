@@ -224,7 +224,7 @@ router.get('/ping', asyncHandler(async (req, res) => {
 
   // Step 3: supabase insert with timeout
   try {
-    const insertPromise = supabase
+    const insertPromise = db
       .from('user_profiles')
       .insert({
         user_id: 'test_diag_user',
