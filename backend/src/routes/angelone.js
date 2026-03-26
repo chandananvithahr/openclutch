@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const SmartAPI = require('smartapi-javascript');
+const { SmartAPI } = require('smartapi-javascript');
 const repos = require('../repositories');
 const logger = require('../lib/logger');
 
