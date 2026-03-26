@@ -1,22 +1,29 @@
 # OpenClutch
 
-**Your life's control room — one AI that knows your money, career, health, and mood, and connects the dots between them.**
+**The guide you never had — for your money, health, career, and life.**
 
-No other app does this. Zerodha doesn't know you're stressed. Google Fit doesn't know you're broke. LinkedIn doesn't know your portfolio crashed and you should NOT quit your job right now.
-
-The moat is **cross-domain intelligence**. Not any single feature.
+A sound mind and a healthy body lead to clean discipline with money — and vice versa. Sleep, spending, fitness, and career aren't separate problems. They're one system. No app connects them today. OpenClutch does.
 
 ---
 
-## The Problem
+## Why I'm Building This
 
-Indian professionals (28-35) manage their lives across 10+ disconnected apps. Your broker doesn't talk to your bank. Your health tracker doesn't know about your spending. Your career decisions happen in a vacuum without financial context.
+I'm a mechanical engineer at BEL, leading procurement on QRSAM — a multi-billion dollar defence missile program. No CS background. Taught myself to code specifically to build this.
 
-Every "personal finance app" solves one slice. Nobody connects the dots.
+- My father drives cars for a living. No one in my family knew about IITs, SIPs, or career planning. I found out IITs existed in my second year of college.
+- Got my first salary at 23, started options trading, lost ₹15L, went into debt. Was sleeping at 3 AM watching US and Indian markets.
+- Hit 80kg at 5'11". Went through a breakup that was a wake-up call.
+- Spent 3 years recovering — got the money back, saved aggressively, cut 8kg in 12 months.
+- Got admitted to Purdue, USC, Maryland at 29. If someone had guided me at 17, I'd have been there at 22.
+- **Every setback was a guidance problem, not an intelligence problem.**
 
-## What OpenClutch Does
+OpenClutch tells you what no one else will — "your Zomato habit = ₹1.8L/year" or "you spend 40% more after sleeping under 5 hours."
 
-One AI assistant across 6 life domains:
+---
+
+## What It Does
+
+One AI assistant that connects 6 life domains:
 
 | Domain | What It Knows | Example Insight |
 |--------|---------------|-----------------|
@@ -35,11 +42,35 @@ A 60-second weekly intelligence report no single-domain app can produce:
 
 ### Cross-Domain Pattern Detection
 
-- "You spend 2x more on days you sleep under 6 hours" *(health -> money)*
-- "Last 3 times markets dropped 2%+, you panic-sold within 48hrs" *(wealth -> behavior)*
-- "Every time you order food after 11pm, you skip morning walk" *(money -> health)*
+- "You spend 2x more on days you sleep under 6 hours" *(health → money)*
+- "Last 3 times markets dropped 2%+, you panic-sold within 48hrs" *(wealth → behavior)*
+- "Every time you order food after 11pm, you skip morning walk" *(money → health)*
+- "Starting a SIP at 23 = ₹47L more by 40" *(time → wealth)*
 
 Nobody else can do this because nobody else has ALL the data.
+
+---
+
+## What's Built and Working
+
+- [x] Node.js + Express backend, live on Railway
+- [x] 4 broker integrations (Zerodha, Angel One, Fyers, Upstox) — tested with real portfolio data
+- [x] 27 AI tools (GPT-4o-mini) — spending analysis, portfolio tracking, health correlation, career scoring
+- [x] React Native Android app with chat-first interface
+- [x] 11 Supabase tables, JWT auth, rate limiting, DeerFlow2 workflow engine
+- [x] SSE streaming chat with markdown rendering
+- [x] Gmail + Google Calendar OAuth2 integration
+- [x] Bank SMS parsing → expense categorization (150+ Indian merchants)
+- [x] Health Connect (Android) + HealthKit (iOS) sync
+- [x] 3-tier memory system (conversation window + LLM summary + extracted facts)
+- [x] Background workflows (email sync, portfolio sync, health sync, weekly review)
+- [x] In-app notifications from workflow agents
+- [x] Cleo-inspired onboarding (10-screen adaptive flow)
+- [x] Mutual fund tracking via CAS PDF upload
+- [x] Google Drive file analysis (PDF, Excel, CSV)
+- [x] Inline connection prompts — AI suggests connecting services contextually
+
+**Live backend:** [humble-blessing-production.up.railway.app](https://humble-blessing-production.up.railway.app)
 
 ---
 
@@ -63,7 +94,7 @@ Backend (Node.js + Express)
 Database (Supabase + PostgreSQL)
   → RLS on all tables
   → pgvector for semantic memory
-  → 11 tables (messages, connected_apps, user_facts, sms_transactions, etc.)
+  → 11 tables
 ```
 
 ### How the AI Works
@@ -79,8 +110,6 @@ User types message
 ```
 
 The AI doesn't hallucinate about your finances — it calls real APIs (Zerodha KiteConnect, Angel SmartAPI, Fyers API v3, Upstox API v2) and returns your actual portfolio data.
-
----
 
 ## Tech Stack
 
@@ -112,22 +141,13 @@ Required env vars: `OPENAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `JWT_S
 
 ---
 
-## What's Built
+## Market
 
-- [x] Chat UI with SSE streaming + markdown rendering
-- [x] 27 AI tools (portfolio, spending, salary, journal, health, career, calendar)
-- [x] 4 broker integrations (Zerodha, Angel One, Upstox, Fyers) — all tested with real accounts
-- [x] Gmail + Google Calendar OAuth2
-- [x] Bank SMS parsing → expense categorization (150+ Indian merchants)
-- [x] Health Connect (Android) + HealthKit (iOS) sync
-- [x] 3-tier memory system (conversation window + LLM summary + extracted facts)
-- [x] Workflow engine with background sync (email, portfolio, health, weekly review)
-- [x] In-app notifications from workflow agents
-- [x] Cleo-inspired onboarding (10-screen adaptive flow)
-- [x] Mutual fund tracking via CAS PDF upload
-- [x] Google Drive file analysis (PDF, Excel, CSV)
-- [x] JWT auth on all endpoints + RLS on all Supabase tables
-- [x] Deployed on Railway (auto-deploy on push)
+- **TAM:** $793B Indian fintech market
+- **Target:** 25M Indian professionals (28-35) managing money across multiple apps
+- **Validation:** Cleo (US equivalent) hit $150M ARR proving chat-first finance works. No one is doing this for India.
+- **Unit economics:** 91% gross margins, breakeven at 30 paying users
+- **Why now:** Fi Money died (3.5M orphaned users), Indian broker APIs opened up, Health Connect on Android covers 95%+ Indian wearables
 
 ## What's Next
 
@@ -139,26 +159,10 @@ Required env vars: `OPENAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `JWT_S
 
 ---
 
-## Market
-
-- **TAM:** $793B Indian fintech market
-- **Target:** 25M Indian professionals (28-35) managing money across multiple apps
-- **Validation:** Cleo (US equivalent) hit $150M ARR proving chat-first finance works. No one is doing this for India.
-- **Unit economics:** 91% gross margins, breakeven at 30 paying users
-
-## Why Now
-
-1. **AI tool-calling matured** — GPT-4o-mini can reliably call 27 tools in sequence
-2. **Indian broker APIs opened up** — Zerodha KiteConnect, Angel SmartAPI, Fyers v3 all launched in the last 2 years
-3. **Health Connect on Android** — Google shipped Health Connect in 2023, covering 95%+ of Indian wearables (Noise, Fire-Boltt, boAt, Xiaomi)
-4. **Fi Money died** — 3.5M orphaned users looking for a smart finance app
-
----
-
 ## License
 
 MIT
 
-## Contact
+## Built By
 
-Built by Chandan — applying to YC S26.
+**Chandan** — Mechanical engineer at BEL. First-generation kid from Bangalore whose father drives cars for a living — who got tired of waiting for someone to build what he needed.
