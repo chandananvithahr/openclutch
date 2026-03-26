@@ -193,4 +193,40 @@ router.post('/token', (req, res) => {
   }
 });
 
+// ─── GET /ping (temporary diagnostic) ─────────────────────────────────────
+// Tests each signup step in isolation. Remove after debugging.
+router.get('/ping', asyncHandler(async (req, res) => {
+  const steps = {};
+
+  // Step 1: bcrypt
+  try {
+    const h = await bcrypt.hash('testpassword', 10);
+    steps.bcrypt = `ok (${h.length} chars)`;
+  } catch (e) {
+    steps.bcrypt = `ERROR: ${e.message}`;
+  }
+
+  // Step 2: supabase select from user_profiles
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('user_id')
+      .eq('email', 'nonexistent@test.com')
+      .single();
+    steps.supabase_select = error ? `error code=${error.code} msg=${error.message}` : `data=${JSON.stringify(data)}`;
+  } catch (e) {
+    steps.supabase_select = `THROW: ${e.message}`;
+  }
+
+  // Step 3: issueToken
+  try {
+    const t = issueToken('test_user_diag');
+    steps.issue_token = `ok (${t.length} chars)`;
+  } catch (e) {
+    steps.issue_token = `ERROR: ${e.message}`;
+  }
+
+  res.json({ ok: true, steps });
+}));
+
 module.exports = router;
