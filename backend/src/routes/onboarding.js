@@ -11,6 +11,16 @@ const { asyncHandler, HTTPError } = require('../middleware/errors');
 
 const router = express.Router();
 
+// Allowlisted fields — ONLY these can be written to the database
+const ALLOWED_FIELDS = new Set([
+  'name', 'age', 'city', 'mobile', 'email', 'height_cm', 'weight_kg',
+  'occupation', 'college', 'field_of_study', 'study_year', 'job_feature_enabled',
+  'annual_ctc', 'monthly_emi', 'company', 'role',
+  'fitness_active', 'has_fitness_tracker', 'tracker_type',
+  'savings_methods', 'owns_car', 'owns_bike', 'owns_house',
+  'domain_priorities', 'tone',
+]);
+
 // Fields required to reach 100% completeness
 const PROFILE_FIELDS = [
   'name', 'age', 'city', 'occupation',
@@ -18,6 +28,15 @@ const PROFILE_FIELDS = [
 ];
 const WORKING_FIELDS = ['annual_ctc', 'monthly_emi'];
 const STUDENT_FIELDS = ['field_of_study'];
+
+// Strip any fields not in the allowlist
+function sanitizeFields(body) {
+  const clean = {};
+  for (const [key, value] of Object.entries(body)) {
+    if (ALLOWED_FIELDS.has(key)) clean[key] = value;
+  }
+  return clean;
+}
 
 function calcCompleteness(profile) {
   let filled = 0;
@@ -48,8 +67,7 @@ function calcCompleteness(profile) {
 // Body: profile fields (partial or full — upsert pattern)
 router.post('/profile', asyncHandler(async (req, res) => {
   const userId = req.userId;
-  const fields = { ...req.body };
-  delete fields.userId; // strip if sent — always use JWT userId
+  const fields = sanitizeFields(req.body);
 
   if (!fields.name) throw new HTTPError(400, 'name is required');
 
@@ -94,7 +112,7 @@ router.get('/profile', asyncHandler(async (req, res) => {
 // Update specific fields only (e.g., tone change, connect broker nudge dismissed)
 router.patch('/profile', asyncHandler(async (req, res) => {
   const userId = req.userId;
-  const fields = req.body;
+  const fields = sanitizeFields(req.body);
 
   if (!Object.keys(fields).length) throw new HTTPError(400, 'No fields to update');
 

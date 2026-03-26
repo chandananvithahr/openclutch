@@ -11,7 +11,7 @@ const gmail = require('./gmail');
 const logger = require('../lib/logger');
 const config = require('../lib/config');
 
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({ dest: 'uploads/', limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB max for resumes
 
 // POST /api/career/resume — upload and parse resume PDF
 router.post('/resume', upload.single('pdf'), async (req, res) => {
@@ -21,7 +21,7 @@ router.post('/resume', upload.single('pdf'), async (req, res) => {
 
   try {
     // Read file as text (basic extraction — works for text-based PDFs)
-    const fileBuffer = fs.readFileSync(req.file.path);
+    const fileBuffer = await require('fs').promises.readFile(req.file.path);
     // Keep Unicode letters (Indian names, Devanagari, etc.) — only strip control chars
     const rawText = fileBuffer.toString('utf-8').replace(/[\x00-\x1F\x7F]/g, ' ').replace(/\s+/g, ' ').trim();
 
@@ -41,14 +41,15 @@ router.post('/resume', upload.single('pdf'), async (req, res) => {
       last_updated: new Date().toISOString(),
     });
 
-    // Clean up temp file
-    fs.unlinkSync(req.file.path);
-
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true, profile: parsed });
   } catch (err) {
-    if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: `Resume parse failed: ${err.message}` });
+  } finally {
+    // Always clean up temp file — even on error
+    if (req.file?.path) {
+      fs.unlink(req.file.path, () => {}); // async, ignore errors
+    }
   }
 });
 

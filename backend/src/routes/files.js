@@ -103,7 +103,11 @@ router.post('/analyze', upload.single('file'), asyncHandler(async (req, res) => 
     throw new HTTPError(400, 'No file uploaded. Send file as multipart/form-data with field name "file".');
   }
 
-  const { question, tone = 'pro' } = req.body;
+  const { tone = 'pro' } = req.body;
+  // Cap question length to prevent prompt inflation attacks
+  const question = typeof req.body.question === 'string'
+    ? req.body.question.slice(0, 500)
+    : undefined;
   const { path: filePath, mimetype, originalname } = req.file;
 
   let extracted;

@@ -4,14 +4,18 @@
 'use strict';
 
 const config  = require('../lib/config');
-const windows = new Map(); // userId -> { count, windowStart }
+const windows = new Map(); // key -> { count, windowStart }
 
 const { WINDOW_MS, MAX_REQUESTS, CLEANUP_INTERVAL } = config.RATE_LIMIT;
 
 function rateLimitMiddleware(req, res, next) {
-  // Use userId if provided, otherwise fall back to IP to prevent anonymous bucket sharing
-  const userId = req.body?.userId || req.query?.userId
-    || req.ip || req.headers['x-forwarded-for'] || 'anonymous';
+  // Primary: use JWT-authenticated userId (set by auth middleware)
+  // Fallback: IP address (for unauthenticated or pre-auth requests)
+  const userId = req.userId
+    || req.ip
+    || req.headers['x-forwarded-for']?.split(',')[0]?.trim()
+    || 'anonymous';
+
   const now = Date.now();
 
   let window = windows.get(userId);

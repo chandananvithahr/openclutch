@@ -189,9 +189,13 @@ router.post('/analyze', asyncHandler(async (req, res) => {
     await loadTokensFromDB(userId).catch(() => {});
   }
 
-  const { fileId, question, tone = 'pro' } = req.body;
+  const { fileId, tone = 'pro' } = req.body;
+  // Cap question length to prevent prompt inflation attacks
+  const question = typeof req.body.question === 'string'
+    ? req.body.question.slice(0, 500)
+    : undefined;
 
-  if (!fileId) throw new HTTPError(400, 'fileId is required');
+  if (!fileId || typeof fileId !== 'string') throw new HTTPError(400, 'fileId is required');
 
   const drive = getDriveClient(userId);
 

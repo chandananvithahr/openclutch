@@ -44,10 +44,11 @@ function clearTokenCache(userId) {
   tokenCache.delete(`${userId}:upstox`);
 }
 
-// Set token on the SDK singleton for the current request
-function setSDKToken(token) {
-  const oauth2 = ApiClient.instance.authentications['OAUTH2'];
-  oauth2.accessToken = token;
+// Create a per-request ApiClient to avoid singleton race conditions between concurrent users
+function createApiClient(token) {
+  const client = new ApiClient();
+  client.authentications['OAUTH2'].accessToken = token;
+  return client;
 }
 
 // ── Step 1: Login redirect ──────────────────────────────────────────────────
@@ -95,7 +96,6 @@ router.get('/callback', async (req, res) => {
     );
 
     const accessToken = response.data.access_token;
-    setSDKToken(accessToken);
 
     await repos.connectedApps.saveToken(userId, 'upstox', {
       accessToken,
@@ -133,8 +133,7 @@ router.get('/portfolio', async (req, res) => {
   }
 
   try {
-    setSDKToken(token);
-    const holdings = await fetchHoldings();
+    const holdings = await fetchHoldings(token);
 
     let totalValue    = 0;
     let totalInvested = 0;
@@ -190,9 +189,11 @@ router.post('/disconnect', async (req, res) => {
 
 // ── Shared helper (used by brokers/index.js adapter) ───────────────────────
 
-async function fetchHoldings() {
+async function fetchHoldings(token) {
+  if (!token) return [];
+  const client = createApiClient(token);
   return new Promise((resolve, reject) => {
-    const portfolioApi = new PortfolioApi();
+    const portfolioApi = new PortfolioApi(client);
     portfolioApi.getHoldings(process.env.UPSTOX_API_VERSION || '2.0', (err, data) => {
       if (err) return reject(err);
       const holdings = (data?.data || []).map(h => ({

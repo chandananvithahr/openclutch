@@ -55,7 +55,8 @@ router.post('/sync', async (req, res) => {
 router.get('/summary', async (req, res) => {
   const userId = req.userId;
   const { days = 7 } = req.query;
-  const summary = await getHealthSummary(userId, parseInt(days));
+  const safeDays = Math.min(Math.max(1, parseInt(days) || 7), 365);
+  const summary = await getHealthSummary(userId, safeDays);
   res.json(summary);
 });
 

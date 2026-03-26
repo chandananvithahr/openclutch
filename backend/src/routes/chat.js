@@ -45,6 +45,17 @@ router.post('/', rateLimitMiddleware, asyncHandler(async (req, res) => {
     throw new HTTPError(400, `Too many messages in request. Max ${config.MAX_MESSAGES_PER_REQUEST}.`);
   }
 
+  // Validate individual messages — prevent oversized content and missing fields
+  const MAX_MSG_LENGTH = 4000;
+  for (const msg of messages) {
+    if (!msg.role || typeof msg.role !== 'string') {
+      throw new HTTPError(400, 'Each message must have a role field');
+    }
+    if (msg.content && typeof msg.content === 'string' && msg.content.length > MAX_MSG_LENGTH) {
+      throw new HTTPError(400, `Message content too long. Max ${MAX_MSG_LENGTH} characters.`);
+    }
+  }
+
   if (tone && !VALID_TONES.includes(tone)) {
     throw new HTTPError(400, `Invalid tone. Must be one of: ${VALID_TONES.join(', ')}`);
   }
@@ -98,11 +109,17 @@ router.post('/', rateLimitMiddleware, asyncHandler(async (req, res) => {
   let aiMessage = await chat({ messages: messagesWithContext, tools, tone, connectedServices });
 
   // --- Step 2: Execute tool calls with per-tool error isolation ---
+  // Cap tool calls to prevent unbounded cost from adversarial prompts
+  const MAX_TOOL_CALLS = 5;
   let toolMessages = [];
   if (aiMessage.tool_calls && aiMessage.tool_calls.length > 0) {
+    const toolCalls = aiMessage.tool_calls.slice(0, MAX_TOOL_CALLS);
+    if (aiMessage.tool_calls.length > MAX_TOOL_CALLS) {
+      logger.warn('Tool call cap reached', { requested: aiMessage.tool_calls.length, cap: MAX_TOOL_CALLS, userId });
+    }
     toolMessages = [aiMessage];
 
-    for (const toolCall of aiMessage.tool_calls) {
+    for (const toolCall of toolCalls) {
       const toolName = toolCall.function.name;
       let toolResult;
 
@@ -276,7 +293,8 @@ router.post('/stream', rateLimitMiddleware, asyncHandler(async (req, res) => {
 // GET /api/chat/history
 router.get('/history', asyncHandler(async (req, res) => {
   const userId = req.userId;
-  const limit = parseInt(req.query.limit) || config.HISTORY.DEFAULT_LIMIT;
+  const parsed = parseInt(req.query.limit);
+  const limit = (parsed > 0 ? Math.min(parsed, config.HISTORY.MAX_LIMIT || 100) : config.HISTORY.DEFAULT_LIMIT);
 
   const { data, error } = await repos.messages.loadHistory(userId, limit);
   if (error) throw new HTTPError(500, error.message);

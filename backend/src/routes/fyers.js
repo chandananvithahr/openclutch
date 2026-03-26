@@ -71,16 +71,12 @@ router.get('/login', (req, res) => {
 router.get('/callback', async (req, res) => {
   const { auth_code, state } = req.query;
 
-  // Fyers sends state=sample_state ignoring our state value — fall back to userId query param
-  let userId;
-  const { valid, userId: stateUserId } = validateState(state);
-  if (valid && stateUserId) {
-    userId = stateUserId;
-  } else {
-    userId = req.query.userId || req.userId;
+  // Validate OAuth state — NEVER fall back to query params (CSRF protection)
+  const { valid, userId } = validateState(state);
+  if (!valid || !userId) {
+    logger.warn('Fyers callback — invalid or expired OAuth state', { state });
+    return res.status(403).send('Invalid or expired OAuth state. Please try connecting again from the app.');
   }
-
-  if (!userId) return res.status(403).send('userId missing — add ?userId=test123 to your login URL');
   if (!auth_code) return res.status(400).send('Missing auth_code from Fyers');
 
   try {
@@ -217,7 +213,12 @@ async function fetchHoldings(tokenOrUserId) {
 
 function isTokenExpired(err) {
   const msg = err?.message || '';
-  return msg.includes('token') || msg.includes('Unauthorized') || msg.includes('Invalid');
+  const code = err?.code || err?.s || '';
+  // Only match specific Fyers error patterns — not generic words
+  return code === '-16' // Fyers invalid token code
+    || msg.includes('Invalid token')
+    || msg.includes('Token is expired')
+    || msg.includes('Access Denied');
 }
 
 module.exports = router;

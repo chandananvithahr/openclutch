@@ -89,10 +89,7 @@ const adapters = [
       const u = require('../routes/upstox');
       const token = await u.getAccessToken(userId);
       if (!token) return [];
-      // Set SDK token before fetching
-      const { ApiClient } = require('upstox-js-sdk');
-      ApiClient.instance.authentications['OAUTH2'].accessToken = token;
-      const raw = await u.fetchHoldings();
+      const raw = await u.fetchHoldings(token);
       return raw.map(h => normalizeHolding({
         symbol:       h.symbol,
         name:         h.name,
