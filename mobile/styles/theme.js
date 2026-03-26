@@ -1,37 +1,37 @@
 // OpenClutch Design System
-// Inspired by Kailash Nadh's minimal philosophy (oat.ink, listmonk)
-// Primary brand: #6C63FF (modern, 28-35 Indian fintech audience)
+// Warm cocoa palette — dark mode default, no blues, no pure white/black
+// Inspired by Cleo AI warmth + Kailash Nadh's minimal philosophy
 
 export const colors = {
   // Brand
-  primary: '#6C63FF',
-  primaryLight: 'rgba(108, 99, 255, 0.08)',
-  primaryDim: 'rgba(108, 99, 255, 0.15)',
+  primary: '#FFE36D',
+  primaryLight: 'rgba(255, 227, 109, 0.12)',
+  primaryDim: 'rgba(255, 227, 109, 0.20)',
 
   // Financial — green/red for gain/loss (universal finance language)
-  gain: '#16a34a',
-  gainBg: 'rgba(22, 163, 74, 0.08)',
-  loss: '#dc2626',
-  lossBg: 'rgba(220, 38, 38, 0.08)',
+  gain: '#4CAF50',
+  gainBg: 'rgba(76, 175, 80, 0.12)',
+  loss: '#FF6B6B',
+  lossBg: 'rgba(255, 107, 107, 0.12)',
   neutral: '#f59e0b',
 
-  // Neutrals (Kailash-style minimal grayscale)
-  bg: '#ffffff',
-  bgMuted: '#f9f9f9',
-  bgSubtle: '#f4f4f4',
-  surface: '#f0f0f0',
-  border: '#e8e8e8',
-  borderStrong: '#d4d4d4',
+  // Cocoa palette (dark mode default)
+  bg: '#2D1B14',
+  bgMuted: '#3A2820',
+  bgSubtle: '#4A3028',
+  surface: '#3A2820',
+  border: '#6B4C3A',
+  borderStrong: '#8B6C5A',
 
-  // Text hierarchy
-  text: '#1a1a1a',
-  textSecondary: '#555555',
-  textMuted: '#888888',
-  textFaint: '#aaaaaa',
+  // Text hierarchy (warm whites)
+  text: '#F5F0EB',
+  textSecondary: '#B8A99A',
+  textMuted: '#8B7A6B',
+  textFaint: '#6B5C4D',
 
   // Status
-  online: '#16a34a',
-  offline: '#dc2626',
+  online: '#4CAF50',
+  offline: '#FF6B6B',
   warning: '#f59e0b',
 };
 
@@ -85,12 +85,12 @@ export const financial = {
     letterSpacing: -0.3,
   },
   gainStyle: {
-    color: '#16a34a',
+    color: '#4CAF50',
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
   lossStyle: {
-    color: '#dc2626',
+    color: '#FF6B6B',
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },

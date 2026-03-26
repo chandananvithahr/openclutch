@@ -5,6 +5,7 @@
 
 import { useState, useCallback } from 'react';
 import BACKEND_URL from '../services/config';
+import { getToken } from '../services/api';
 
 const WELCOME_MESSAGE = {
   id: 'welcome',
@@ -46,9 +47,15 @@ export function useChat(tone) {
     setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '', streaming: true }]);
 
     try {
+      const token = await getToken();
+      const authHeaders = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
       const response = await fetch(`${BACKEND_URL}/api/chat/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({ messages: apiMessages, tone }),
         // myChat reactNative textStreaming flag — enables ReadableStream on RN
         reactNative: { textStreaming: true },
@@ -100,9 +107,13 @@ export function useChat(tone) {
     } catch (streamErr) {
       // Fallback to non-streaming /api/chat
       try {
+        const fallbackToken = await getToken();
         const res = await fetch(`${BACKEND_URL}/api/chat`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(fallbackToken ? { Authorization: `Bearer ${fallbackToken}` } : {}),
+          },
           body: JSON.stringify({ messages: apiMessages, tone }),
         });
         const data = await res.json();

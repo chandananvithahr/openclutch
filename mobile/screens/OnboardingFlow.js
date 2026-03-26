@@ -22,7 +22,8 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import OnboardingCard from '../components/OnboardingCard';
-import { BACKEND_URL } from '../services/config';
+import BACKEND_URL from '../services/config';
+import { getToken } from '../services/api';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -641,9 +642,13 @@ export default function OnboardingFlow({ navigation }) {
         tone:              'pro', // default, user can change in settings
       };
 
+      const token = await getToken();
       await fetch(`${BACKEND_URL}/api/onboarding/profile`, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body:    JSON.stringify(profile),
       });
 

@@ -9,8 +9,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MessageBubble from '../components/MessageBubble';
 import TypingIndicator from '../components/TypingIndicator';
 import Sidebar from '../components/Sidebar';
-import { getChatHistory } from '../services/api';
+import { getChatHistory, getToken, authFetch } from '../services/api';
 import BACKEND_URL from '../services/config';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { requestSmsPermission, syncSmsTransactions } from '../services/smsParser';
 import { useChat } from '../hooks/useChat';
 
@@ -85,19 +86,29 @@ export default function ChatScreen() {
   const [angelOneConnected, setAngelOneConnected] = useState(false);
   const [gmailConnected, setGmailConnected] = useState(false);
 
+  // Upstox + Fyers status
+  const [upstoxConnected, setUpstoxConnected] = useState(false);
+  const [fyersConnected, setFyersConnected] = useState(false);
+
   useEffect(() => {
     const checkStatus = async () => {
       try {
         const res = await fetch(`${BACKEND_URL}/health`);
         if (res.ok) {
           setBackendOnline(true);
-          const [zRes, aRes, gRes] = await Promise.all([
-            fetch(`${BACKEND_URL}/api/zerodha/status`).then(r => r.json()).catch(() => ({ connected: false })),
-            fetch(`${BACKEND_URL}/api/angelone/status`).then(r => r.json()).catch(() => ({ connected: false })),
-            fetch(`${BACKEND_URL}/api/gmail/status`).then(r => r.json()).catch(() => ({ connected: false })),
+          const token = await getToken();
+          const headers = token ? { Authorization: `Bearer ${token}` } : {};
+          const [zRes, aRes, uRes, fRes, gRes] = await Promise.all([
+            fetch(`${BACKEND_URL}/api/zerodha/status`, { headers }).then(r => r.json()).catch(() => ({ connected: false })),
+            fetch(`${BACKEND_URL}/api/angelone/status`, { headers }).then(r => r.json()).catch(() => ({ connected: false })),
+            fetch(`${BACKEND_URL}/api/upstox/status`, { headers }).then(r => r.json()).catch(() => ({ connected: false })),
+            fetch(`${BACKEND_URL}/api/fyers/status`, { headers }).then(r => r.json()).catch(() => ({ connected: false })),
+            fetch(`${BACKEND_URL}/api/gmail/status`, { headers }).then(r => r.json()).catch(() => ({ connected: false })),
           ]);
           setZerodhaConnected(zRes.connected);
           setAngelOneConnected(aRes.connected);
+          setUpstoxConnected(uRes.connected);
+          setFyersConnected(fRes.connected);
           setGmailConnected(gRes.connected);
         } else {
           setBackendOnline(false);
@@ -116,7 +127,9 @@ export default function ChatScreen() {
     const syncSms = async () => {
       const granted = await requestSmsPermission();
       if (!granted) return;
-      const result = await syncSmsTransactions('default_user');
+      const userId = await AsyncStorage.getItem('clutch_user_id');
+      if (!userId) return;
+      const result = await syncSmsTransactions(userId);
       if (result.synced > 0) console.log(`SMS: synced ${result.synced} transactions`);
     };
     syncSms();
@@ -144,7 +157,11 @@ export default function ChatScreen() {
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/workflows/notifications?userId=default_user`);
+      const token = await getToken();
+      if (!token) return;
+      const res = await fetch(`${BACKEND_URL}/api/workflows/notifications`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) return;
       const data = await res.json();
       const list = data.notifications || [];
@@ -183,49 +200,42 @@ export default function ChatScreen() {
   const [angelCreds, setAngelCreds] = useState({ clientId: '', password: '', totp: '' });
   const [angelConnecting, setAngelConnecting] = useState(false);
 
-  // Broker connections
-  const handleZerodhaConnect = useCallback(async () => {
+  // Broker connections — all OAuth flows open in browser
+  const handleOAuthConnect = useCallback(async (broker, endpoint) => {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/zerodha/login?json=true`, {
-        headers: { Accept: 'application/json' },
+      const token = await getToken();
+      const res = await fetch(`${BACKEND_URL}${endpoint}?json=true`, {
+        headers: { Accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       });
       const data = await res.json();
       if (data.loginUrl) {
         const { Linking } = require('react-native');
         await Linking.openURL(data.loginUrl);
       } else {
-        Alert.alert('Zerodha', 'Open on laptop:\n127.0.0.1:3000/api/zerodha/login');
+        Alert.alert(broker, `Open on laptop:\n${BACKEND_URL}${endpoint}`);
       }
     } catch {
-      Alert.alert('Zerodha', 'Start backend first, then open:\n127.0.0.1:3000/api/zerodha/login');
+      Alert.alert(broker, `Could not connect. Check backend is running.`);
     }
   }, []);
 
-  const handleGmailConnect = useCallback(async () => {
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/gmail/login?json=true`, {
-        headers: { Accept: 'application/json' },
-      });
-      const data = await res.json();
-      if (data.loginUrl) {
-        const { Linking } = require('react-native');
-        await Linking.openURL(data.loginUrl);
-      } else {
-        Alert.alert('Gmail', 'Open on laptop:\n127.0.0.1:3000/api/gmail/login');
-      }
-    } catch {
-      Alert.alert('Gmail', 'Start backend first, then open:\n127.0.0.1:3000/api/gmail/login');
-    }
-  }, []);
+  const handleZerodhaConnect = useCallback(() => handleOAuthConnect('Zerodha', '/api/zerodha/login'), [handleOAuthConnect]);
+  const handleUpstoxConnect = useCallback(() => handleOAuthConnect('Upstox', '/api/upstox/login'), [handleOAuthConnect]);
+  const handleFyersConnect = useCallback(() => handleOAuthConnect('Fyers', '/api/fyers/login'), [handleOAuthConnect]);
+  const handleGmailConnect = useCallback(() => handleOAuthConnect('Gmail', '/api/gmail/login'), [handleOAuthConnect]);
 
   const handleAngelOneConnect = useCallback(async () => {
     const { clientId, password, totp } = angelCreds;
     if (!clientId || !password || !totp) return;
     setAngelConnecting(true);
     try {
+      const token = await getToken();
       const res = await fetch(`${BACKEND_URL}/api/angelone/connect`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ clientId, password, totp }),
       });
       const data = await res.json();
@@ -273,7 +283,7 @@ export default function ChatScreen() {
       behavior="padding"
       keyboardVerticalOffset={insets.top + 48}
     >
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" translucent={false} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.bg} translucent={false} />
 
       {/* ===== HEADER ===== */}
       <View style={styles.header}>
@@ -374,9 +384,13 @@ export default function ChatScreen() {
         onNewChat={handleNewChat}
         zerodhaConnected={zerodhaConnected}
         angelOneConnected={angelOneConnected}
+        upstoxConnected={upstoxConnected}
+        fyersConnected={fyersConnected}
         gmailConnected={gmailConnected}
         onConnectZerodha={() => { closeSidebar(); handleZerodhaConnect(); }}
         onConnectAngel={() => { closeSidebar(); setShowAngelOneModal(true); }}
+        onConnectUpstox={() => { closeSidebar(); handleUpstoxConnect(); }}
+        onConnectFyers={() => { closeSidebar(); handleFyersConnect(); }}
         onConnectGmail={() => { closeSidebar(); handleGmailConnect(); }}
         backendOnline={backendOnline}
       />

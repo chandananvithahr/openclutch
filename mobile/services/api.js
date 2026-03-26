@@ -46,9 +46,26 @@ async function authFetch(endpoint, options = {}) {
     headers,
   });
 
-  // If 401, token is expired — clear it
+  // If 401, token is expired — try re-bootstrap once
   if (res.status === 401) {
     await clearToken();
+    try {
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      const userId = await AsyncStorage.getItem('clutch_user_id');
+      if (userId) {
+        await bootstrapAuth(userId);
+        // Retry the original request with fresh token
+        const newToken = await getToken();
+        const retryHeaders = {
+          ...options.headers,
+          'Content-Type': 'application/json',
+          ...(newToken ? { Authorization: `Bearer ${newToken}` } : {}),
+        };
+        return fetch(`${BACKEND_URL}${endpoint}`, { ...options, headers: retryHeaders });
+      }
+    } catch {
+      // Re-bootstrap failed — return original 401
+    }
   }
 
   return res;
@@ -71,3 +88,6 @@ export async function getChatHistory(limit = 50) {
   const data = await res.json();
   return data.messages || [];
 }
+
+// Export for useChat and other modules that need authenticated requests
+export { authFetch };

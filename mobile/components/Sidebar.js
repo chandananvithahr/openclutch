@@ -11,8 +11,8 @@ function Sidebar({
   visible, onClose, slideAnim,
   conversations, activeConversationId,
   onSelectConversation, onNewChat,
-  zerodhaConnected, angelOneConnected, gmailConnected,
-  onConnectZerodha, onConnectAngel, onConnectGmail,
+  zerodhaConnected, angelOneConnected, upstoxConnected, fyersConnected, gmailConnected,
+  onConnectZerodha, onConnectAngel, onConnectUpstox, onConnectFyers, onConnectGmail,
   backendOnline,
 }) {
   if (!visible) return null;
@@ -91,6 +91,26 @@ function Sidebar({
                   Angel One
                 </Text>
                 {!angelOneConnected && <Text style={styles.connectLink}>Connect</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.connectionRow}
+                onPress={!upstoxConnected ? onConnectUpstox : undefined}
+              >
+                <Text style={styles.connectionIcon}>{upstoxConnected ? '✓' : '○'}</Text>
+                <Text style={[styles.connectionText, upstoxConnected && styles.connectedText]}>
+                  Upstox
+                </Text>
+                {!upstoxConnected && <Text style={styles.connectLink}>Connect</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.connectionRow}
+                onPress={!fyersConnected ? onConnectFyers : undefined}
+              >
+                <Text style={styles.connectionIcon}>{fyersConnected ? '✓' : '○'}</Text>
+                <Text style={[styles.connectionText, fyersConnected && styles.connectedText]}>
+                  Fyers
+                </Text>
+                {!fyersConnected && <Text style={styles.connectLink}>Connect</Text>}
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.connectionRow}
