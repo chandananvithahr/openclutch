@@ -14,6 +14,7 @@ import BACKEND_URL from '../services/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { requestSmsPermission, syncSmsTransactions } from '../services/smsParser';
 import { useChat } from '../hooks/useChat';
+import ConnectionCard, { detectConnectionPrompts } from '../components/ConnectionCard';
 
 const TONE_OPTIONS = [
   { key: 'bhai', label: 'Bhai', desc: 'Casual, Hinglish' },
@@ -22,6 +23,19 @@ const TONE_OPTIONS = [
 ];
 
 const SIDEBAR_WIDTH = Dimensions.get('window').width * 0.78;
+
+function formatTimeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+}
 const SCROLL_BOTTOM_THRESHOLD = 200; // px from bottom to show scroll button
 const MIN_INPUT_HEIGHT = 44;
 const MAX_INPUT_HEIGHT = 120;
@@ -172,6 +186,23 @@ export default function ChatScreen() {
     }
   }, []);
 
+  const markNotificationsRead = useCallback(async () => {
+    setShowNotifModal(true);
+    if (notifCount === 0) return;
+    try {
+      const token = await getToken();
+      if (!token) return;
+      await fetch(`${BACKEND_URL}/api/workflows/notifications/read-all`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setNotifCount(0);
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    } catch {
+      // silent
+    }
+  }, [notifCount]);
+
   useEffect(() => {
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 30000);
@@ -297,7 +328,7 @@ export default function ChatScreen() {
         </TouchableOpacity>
 
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.headerBtn} onPress={() => setShowNotifModal(true)}>
+          <TouchableOpacity style={styles.headerBtn} onPress={markNotificationsRead}>
             <Text style={styles.newChatIcon}>🔔</Text>
             {notifCount > 0 && (
               <View style={styles.notifBadge}>
@@ -323,7 +354,33 @@ export default function ChatScreen() {
           ref={flatListRef}
           data={messages}
           keyExtractor={item => item.id}
-          renderItem={({ item }) => <MessageBubble message={item} />}
+          renderItem={({ item }) => {
+            const prompts = item.role === 'assistant' && item.id !== 'welcome'
+              ? detectConnectionPrompts(item.content, {
+                  zerodha: zerodhaConnected, angelone: angelOneConnected,
+                  upstox: upstoxConnected, fyers: fyersConnected, gmail: gmailConnected,
+                })
+              : [];
+            return (
+              <View>
+                <MessageBubble message={item} />
+                {prompts.map(svc => (
+                  <ConnectionCard
+                    key={svc}
+                    service={svc}
+                    onConnect={() => {
+                      if (svc === 'zerodha') handleZerodhaConnect();
+                      else if (svc === 'angelone') setShowAngelOneModal(true);
+                      else if (svc === 'upstox') handleUpstoxConnect();
+                      else if (svc === 'fyers') handleFyersConnect();
+                      else if (svc === 'gmail') handleGmailConnect();
+                      else if (svc === 'broker') handleZerodhaConnect(); // default to Zerodha
+                    }}
+                  />
+                ))}
+              </View>
+            );
+          }}
           ListFooterComponent={isTyping ? <TypingIndicator /> : null}
           contentContainerStyle={styles.messageList}
           style={styles.flatList}
@@ -429,16 +486,18 @@ export default function ChatScreen() {
                 <Text style={styles.notifClose}>✕</Text>
               </TouchableOpacity>
             </View>
-            {notifications.length === 0 ? (
-              <Text style={styles.notifEmpty}>No notifications yet.</Text>
-            ) : (
-              notifications.slice(0, 20).map((n, i) => (
-                <View key={i} style={[styles.notifItem, !n.read && styles.notifItemUnread]}>
+            <FlatList
+              data={notifications.slice(0, 30)}
+              keyExtractor={(item, i) => item.id || `notif-${i}`}
+              ListEmptyComponent={<Text style={styles.notifEmpty}>No notifications yet.</Text>}
+              renderItem={({ item: n }) => (
+                <View style={[styles.notifItem, !n.read && styles.notifItemUnread]}>
                   <Text style={styles.notifMsg}>{n.message}</Text>
-                  <Text style={styles.notifTime}>{new Date(n.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</Text>
+                  <Text style={styles.notifTime}>{formatTimeAgo(n.created_at)}</Text>
                 </View>
-              ))
-            )}
+              )}
+              showsVerticalScrollIndicator={false}
+            />
           </View>
         </View>
       </Modal>
