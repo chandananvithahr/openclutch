@@ -26,7 +26,6 @@ const PUBLIC_PATHS = new Set([
   '/api/auth/token',    // legacy bootstrap (admin/dev only)
   '/api/auth/signup',   // self-service signup
   '/api/auth/login',    // self-service login
-  '/api/auth/ping',     // temporary diagnostic
   '/health',
 ]);
 
