@@ -5,8 +5,9 @@ const repos = require('../repositories');
 const logger = require('../lib/logger');
 const { generateState, validateState } = require('../lib/oauthState');
 
+const { BoundedMap } = require('../lib/bounded-map');
 // Per-user token cache — replaces the old single-tenant module-level variable
-const tokenCache = new Map();
+const tokenCache = new BoundedMap(10_000);
 const TOKEN_TTL = 30 * 60 * 1000; // 30 min
 
 async function getAccessToken(userId) {

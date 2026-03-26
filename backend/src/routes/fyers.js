@@ -18,8 +18,9 @@ const { generateState, validateState } = require('../lib/oauthState');
 
 const router = express.Router();
 
+const { BoundedMap } = require('../lib/bounded-map');
 // Per-user token cache
-const tokenCache = new Map();
+const tokenCache = new BoundedMap(10_000);
 const TOKEN_TTL = 30 * 60 * 1000;
 
 async function getAccessToken(userId) {

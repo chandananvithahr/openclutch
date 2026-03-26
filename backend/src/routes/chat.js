@@ -14,6 +14,14 @@ const { rateLimitMiddleware }      = require('../middleware/rateLimit');
 const logger                       = require('../lib/logger');
 const config                       = require('../lib/config');
 
+const CHAT_TIMEOUT_MS = 30_000;
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new HTTPError(504, 'Request timed out. Try again.')), ms)),
+  ]);
+}
+
 // Build a compact profile string for the system prompt
 function formatProfile(p) {
   if (!p) return null;
@@ -60,93 +68,98 @@ router.post('/', rateLimitMiddleware, asyncHandler(async (req, res) => {
     throw new HTTPError(400, `Invalid tone. Must be one of: ${VALID_TONES.join(', ')}`);
   }
 
-  const userContext = { userId };
+  // Wrap entire chat pipeline in a timeout
+  const result = await withTimeout((async () => {
+    const userContext = { userId };
 
-  // --- TIER 1 + 2: Apply sliding window + summarization ---
-  let windowedMessages;
-  try {
-    windowedMessages = await applyMemoryWindow(messages);
-  } catch (err) {
-    logger.warn('Memory window error (non-fatal)', { err: err.message });
-    windowedMessages = messages;
-  }
-
-  // --- TIER 3: Load stored facts + user profile and inject as context ---
-  let facts;
-  let profileSnippet;
-  try {
-    const latestUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content || '';
-    [facts] = await Promise.all([
-      loadFacts(userId, latestUserMsg),
-    ]);
-  } catch (err) {
-    logger.warn('Facts load error (non-fatal)', { err: err.message });
-    facts = null;
-  }
-
-  try {
-    const { data: profile } = await repos.userProfiles.getByUserId(userId);
-    profileSnippet = formatProfile(profile);
-  } catch {
-    profileSnippet = null;
-  }
-
-  const contextParts = [];
-  if (profileSnippet) contextParts.push(`[User Profile]\n${profileSnippet}`);
-  if (facts)          contextParts.push(`[What I know about you]\n${facts}`);
-
-  const messagesWithContext = contextParts.length
-    ? [{ role: 'system', content: contextParts.join('\n\n') }, ...windowedMessages]
-    : windowedMessages;
-
-  // --- Connected services (safe service name list for system prompt) ---
-  const connectedServices = [];
-  if (await zerodha.getAccessToken(userId)) connectedServices.push('Zerodha (portfolio & holdings)');
-  if (await angelone.getJwtToken(userId))  connectedServices.push('Angel One (portfolio & holdings)');
-  if (await gmail.isConnected(userId)) connectedServices.push('Gmail (emails)');
-
-  // --- Step 1: First OpenAI call ---
-  let aiMessage = await chat({ messages: messagesWithContext, tools, tone, connectedServices });
-
-  // --- Step 2: Execute tool calls with per-tool error isolation ---
-  // Cap tool calls to prevent unbounded cost from adversarial prompts
-  const MAX_TOOL_CALLS = 5;
-  let toolMessages = [];
-  if (aiMessage.tool_calls && aiMessage.tool_calls.length > 0) {
-    const toolCalls = aiMessage.tool_calls.slice(0, MAX_TOOL_CALLS);
-    if (aiMessage.tool_calls.length > MAX_TOOL_CALLS) {
-      logger.warn('Tool call cap reached', { requested: aiMessage.tool_calls.length, cap: MAX_TOOL_CALLS, userId });
+    // --- TIER 1 + 2: Apply sliding window + summarization ---
+    let windowedMessages;
+    try {
+      windowedMessages = await applyMemoryWindow(messages);
+    } catch (err) {
+      logger.warn('Memory window error (non-fatal)', { err: err.message });
+      windowedMessages = messages;
     }
-    toolMessages = [aiMessage];
 
-    for (const toolCall of toolCalls) {
-      const toolName = toolCall.function.name;
-      let toolResult;
+    // --- TIER 3: Load stored facts + user profile and inject as context ---
+    let facts;
+    let profileSnippet;
+    try {
+      const latestUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content || '';
+      [facts] = await Promise.all([
+        loadFacts(userId, latestUserMsg),
+      ]);
+    } catch (err) {
+      logger.warn('Facts load error (non-fatal)', { err: err.message });
+      facts = null;
+    }
 
-      try {
-        const toolArgs = JSON.parse(toolCall.function.arguments || '{}');
-        toolResult = await executeTool(toolName, toolArgs, userContext);
-      } catch (err) {
-        logger.error('Tool execution failed', { tool: toolName, err: err.message });
-        toolResult = { error: `${toolName} failed: ${err.message}` };
+    try {
+      const { data: profile } = await repos.userProfiles.getByUserId(userId);
+      profileSnippet = formatProfile(profile);
+    } catch {
+      profileSnippet = null;
+    }
+
+    const contextParts = [];
+    if (profileSnippet) contextParts.push(`[User Profile]\n${profileSnippet}`);
+    if (facts)          contextParts.push(`[What I know about you]\n${facts}`);
+
+    const messagesWithContext = contextParts.length
+      ? [{ role: 'system', content: contextParts.join('\n\n') }, ...windowedMessages]
+      : windowedMessages;
+
+    // --- Connected services (safe service name list for system prompt) ---
+    const connectedServices = [];
+    if (await zerodha.getAccessToken(userId)) connectedServices.push('Zerodha (portfolio & holdings)');
+    if (await angelone.getJwtToken(userId))  connectedServices.push('Angel One (portfolio & holdings)');
+    if (await gmail.isConnected(userId)) connectedServices.push('Gmail (emails)');
+
+    // --- Step 1: First OpenAI call ---
+    let aiMessage = await chat({ messages: messagesWithContext, tools, tone, connectedServices });
+
+    // --- Step 2: Execute tool calls with per-tool error isolation ---
+    const MAX_TOOL_CALLS = 5;
+    let toolMessages = [];
+    if (aiMessage.tool_calls && aiMessage.tool_calls.length > 0) {
+      const toolCalls = aiMessage.tool_calls.slice(0, MAX_TOOL_CALLS);
+      if (aiMessage.tool_calls.length > MAX_TOOL_CALLS) {
+        logger.warn('Tool call cap reached', { requested: aiMessage.tool_calls.length, cap: MAX_TOOL_CALLS, userId });
+      }
+      toolMessages = [aiMessage];
+
+      for (const toolCall of toolCalls) {
+        const toolName = toolCall.function.name;
+        let toolResult;
+
+        try {
+          const toolArgs = JSON.parse(toolCall.function.arguments || '{}');
+          toolResult = await executeTool(toolName, toolArgs, userContext);
+        } catch (err) {
+          logger.error('Tool execution failed', { tool: toolName, err: err.message });
+          toolResult = { error: `${toolName} failed: ${err.message}` };
+        }
+
+        toolMessages.push({
+          role:        'tool',
+          tool_call_id: toolCall.id,
+          content:     JSON.stringify(toolResult),
+        });
       }
 
-      toolMessages.push({
-        role:        'tool',
-        tool_call_id: toolCall.id,
-        content:     JSON.stringify(toolResult),
+      // Step 3: Final answer with tool results
+      aiMessage = await chat({
+        messages: [...messagesWithContext, ...toolMessages],
+        tools:    [],
+        tone,
+        connectedServices,
       });
     }
 
-    // Step 3: Final answer with tool results
-    aiMessage = await chat({
-      messages: [...messagesWithContext, ...toolMessages],
-      tools:    [],
-      tone,
-      connectedServices,
-    });
-  }
+    return { aiMessage, toolMessages };
+  })(), CHAT_TIMEOUT_MS);
 
+  const { aiMessage, toolMessages } = result;
   const reply = aiMessage.content;
 
   // Extract chart data from tool results if present
@@ -154,8 +167,8 @@ router.post('/', rateLimitMiddleware, asyncHandler(async (req, res) => {
   for (const tm of toolMessages) {
     if (tm.role === 'tool') {
       try {
-        const result = JSON.parse(tm.content);
-        if (result.chart_data) { chartData = result.chart_data; break; }
+        const parsed = JSON.parse(tm.content);
+        if (parsed.chart_data) { chartData = parsed.chart_data; break; }
       } catch {
         // Non-JSON tool result — skip
       }

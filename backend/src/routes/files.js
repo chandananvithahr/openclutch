@@ -42,7 +42,7 @@ const upload = multer({
 // Extract text from uploaded file — returns { text, summary, pageCount? }
 async function extractText(filePath, mimetype, originalName) {
   const ext = path.extname(originalName).toLowerCase();
-  const buffer = fs.readFileSync(filePath);
+  const buffer = await fs.promises.readFile(filePath);
 
   if (mimetype === 'application/pdf' || ext === '.pdf') {
     const parsed = await pdfParse(buffer);

@@ -3,11 +3,9 @@
 // Tier 1: Keep last KEEP_VERBATIM messages in full
 // Tier 2: Summarize everything older into a single short summary
 
-const OpenAI  = require('openai');
+const { openai } = require('../lib/ai');
 const config  = require('../lib/config');
 const logger  = require('../lib/logger');
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const { KEEP_VERBATIM, SUMMARIZE_AFTER, SUMMARY_MAX_TOKENS } = config.MEMORY;
 

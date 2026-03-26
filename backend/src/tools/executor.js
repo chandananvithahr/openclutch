@@ -102,21 +102,31 @@ async function getPortfolioChart(userContext) {
   const startDate = new Date();
   startDate.setFullYear(startDate.getFullYear() - 1);
 
-  // Fetch 1-year historical prices for each holding in parallel
-  const historicalData = await Promise.all(
-    holdings.map(async (h) => {
-      try {
-        const result = await yahooFinance.historical(`${h.symbol}.NS`, {
-          period1: startDate,
-          period2: endDate,
-          interval: '1mo',
-        });
-        return { symbol: h.symbol, qty: h.qty, history: result };
-      } catch {
-        return { symbol: h.symbol, qty: h.qty, history: [] };
-      }
-    })
-  );
+  // Fetch 1-year historical prices with concurrency limit (max 5 at a time)
+  const CONCURRENCY = 5;
+  const TIMEOUT_MS = 8000;
+  const historicalData = [];
+  for (let i = 0; i < holdings.length; i += CONCURRENCY) {
+    const batch = holdings.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      batch.map(async (h) => {
+        try {
+          const result = await Promise.race([
+            yahooFinance.historical(`${h.symbol}.NS`, {
+              period1: startDate,
+              period2: endDate,
+              interval: '1mo',
+            }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), TIMEOUT_MS)),
+          ]);
+          return { symbol: h.symbol, qty: h.qty, history: result };
+        } catch {
+          return { symbol: h.symbol, qty: h.qty, history: [] };
+        }
+      })
+    );
+    historicalData.push(...results);
+  }
 
   // Build monthly portfolio value by summing (price × qty) for each stock at each date
   const monthlyTotals = {};

@@ -93,4 +93,4 @@ async function* chatStream({ messages, tone = 'pro', connectedServices = [] }) {
   }
 }
 
-module.exports = { chat, chatStream, VALID_TONES: config.VALID_TONES };
+module.exports = { chat, chatStream, openai, VALID_TONES: config.VALID_TONES };

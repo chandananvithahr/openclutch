@@ -10,12 +10,10 @@
 
 'use strict';
 
-const OpenAI  = require('openai');
+const { openai } = require('../lib/ai');
 const repos   = require('../repositories');
 const config  = require('../lib/config');
 const logger  = require('../lib/logger');
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const EMBED_MODEL          = config.EMBED_MODEL;
 const SIMILARITY_THRESHOLD = config.SIMILARITY_THRESHOLD;

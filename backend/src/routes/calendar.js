@@ -15,8 +15,9 @@ function createOAuthClient() {
   );
 }
 
+const { BoundedMap } = require('../lib/bounded-map');
 // Per-user token cache — keyed by userId
-const tokenCache = new Map();
+const tokenCache = new BoundedMap(10_000);
 
 async function loadTokensFromDB(userId) {
   const { data } = await repos.connectedApps.loadToken(userId, 'google_calendar');

@@ -37,9 +37,11 @@ const READABLE_MIME_TYPES = {
 };
 
 const MAX_TEXT_FOR_AI = 12_000;
+const MAX_DOWNLOAD_SIZE = 20 * 1024 * 1024; // 20 MB
 
+const { BoundedMap } = require('../lib/bounded-map');
 // Per-user token cache — keyed by userId
-const tokenCache = new Map();
+const tokenCache = new BoundedMap(10_000);
 
 function createOAuthClient() {
   return new google.auth.OAuth2(
@@ -205,11 +207,15 @@ router.post('/analyze', asyncHandler(async (req, res) => {
     fields: 'id,name,mimeType,size',
   });
 
-  const { name, mimeType } = meta.data;
+  const { name, mimeType, size } = meta.data;
   const fileType = READABLE_MIME_TYPES[mimeType];
 
   if (!fileType) {
     throw new HTTPError(422, `File type not supported for analysis: ${mimeType}`);
+  }
+
+  if (size && parseInt(size) > MAX_DOWNLOAD_SIZE) {
+    throw new HTTPError(413, `File too large (${(parseInt(size) / 1024 / 1024).toFixed(1)} MB). Max ${MAX_DOWNLOAD_SIZE / 1024 / 1024} MB.`);
   }
 
   // Download / export file content

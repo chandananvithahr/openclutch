@@ -22,8 +22,9 @@ const router = express.Router();
 const UPSTOX_AUTH_URL  = 'https://api.upstox.com/v2/login/authorization/dialog';
 const UPSTOX_TOKEN_URL = 'https://api.upstox.com/v2/login/authorization/token';
 
+const { BoundedMap } = require('../lib/bounded-map');
 // Per-user token cache
-const tokenCache = new Map();
+const tokenCache = new BoundedMap(10_000);
 const TOKEN_TTL = 30 * 60 * 1000;
 
 async function getAccessToken(userId) {
