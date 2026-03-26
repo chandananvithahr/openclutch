@@ -8,6 +8,7 @@
 const express        = require('express');
 const { userProfiles } = require('../repositories');
 const { asyncHandler, HTTPError } = require('../middleware/errors');
+const { validateBody, onboardingProfileSchema } = require('../lib/validation');
 
 const router = express.Router();
 
@@ -65,7 +66,7 @@ function calcCompleteness(profile) {
 
 // POST /api/onboarding/profile
 // Body: profile fields (partial or full — upsert pattern)
-router.post('/profile', asyncHandler(async (req, res) => {
+router.post('/profile', validateBody(onboardingProfileSchema), asyncHandler(async (req, res) => {
   const userId = req.userId;
   const fields = sanitizeFields(req.body);
 

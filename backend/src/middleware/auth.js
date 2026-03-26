@@ -23,7 +23,9 @@ const PUBLIC_PATHS = new Set([
   '/api/gmail/callback',
   '/api/calendar/callback',
   '/api/drive/callback',
-  '/api/auth/token',   // token issuance endpoint (bootstrap — replaced by real auth later)
+  '/api/auth/token',    // legacy bootstrap (admin/dev only)
+  '/api/auth/signup',   // self-service signup
+  '/api/auth/login',    // self-service login
   '/health',
 ]);
 

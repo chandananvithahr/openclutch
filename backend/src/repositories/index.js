@@ -268,7 +268,7 @@ const journalEntries = {
   async loadHistory(userId, limit = 30) {
     const { data, error } = await supabase
       .from('journal_entries')
-      .select('*')
+      .select('entry_date, content, mood, energy_level, tags, linked_spending, linked_sleep_hours, created_at')
       .eq('user_id', userId)
       .order('entry_date', { ascending: false })
       .limit(limit);
@@ -319,7 +319,7 @@ const careerProfiles = {
   async load(userId) {
     const { data, error } = await supabase
       .from('career_profiles')
-      .select('*')
+      .select('user_id, name, email, phone, summary, skills, experience, education, certifications, resume_text, created_at, updated_at')
       .eq('user_id', userId)
       .single();
     return { data, error };
@@ -350,7 +350,7 @@ const jobApplications = {
   async loadAll(userId, limit = 50) {
     const { data, error } = await supabase
       .from('job_applications')
-      .select('*')
+      .select('company, role, status, applied_date, notes, salary_offered, source, fit_score, created_at')
       .eq('user_id', userId)
       .order('applied_date', { ascending: false })
       .limit(limit);
@@ -430,7 +430,7 @@ const userProfiles = {
   async getByUserId(userId) {
     const { data, error } = await supabase
       .from('user_profiles')
-      .select('*')
+      .select('user_id, name, age, city, mobile, email, occupation, college, field_of_study, study_year, job_feature_enabled, annual_ctc, monthly_emi, company, role, fitness_active, has_fitness_tracker, tracker_type, savings_methods, owns_car, owns_bike, owns_house, domain_priorities, height_cm, weight_kg, profile_completeness, onboarding_completed_at, created_at')
       .eq('user_id', userId)
       .single();
     return { data, error };

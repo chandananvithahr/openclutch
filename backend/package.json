@@ -10,6 +10,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.99.3",
     "axios": "^1.13.6",
+    "bcryptjs": "^3.0.3",
     "cheerio": "^1.2.0",
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
@@ -25,7 +26,8 @@
     "smartapi-javascript": "^1.0.27",
     "upstox-js-sdk": "^2.23.0",
     "xlsx": "^0.18.5",
-    "yahoo-finance2": "^3.13.2"
+    "yahoo-finance2": "^3.13.2",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "nodemon": "^3.0.0"

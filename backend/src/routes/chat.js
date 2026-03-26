@@ -13,6 +13,7 @@ const { asyncHandler, HTTPError }  = require('../middleware/errors');
 const { rateLimitMiddleware }      = require('../middleware/rateLimit');
 const logger                       = require('../lib/logger');
 const config                       = require('../lib/config');
+const { validateBody, chatSchema } = require('../lib/validation');
 
 const CHAT_TIMEOUT_MS = 30_000;
 function withTimeout(promise, ms) {
@@ -41,19 +42,17 @@ function formatProfile(p) {
 }
 
 // POST /api/chat
-router.post('/', rateLimitMiddleware, asyncHandler(async (req, res) => {
-  const { messages, tone = 'pro' } = req.body;
+router.post('/', rateLimitMiddleware, validateBody(chatSchema), asyncHandler(async (req, res) => {
+  const { messages, tone } = req.body;
   const userId = req.userId;
 
-  if (!messages || !Array.isArray(messages)) {
-    throw new HTTPError(400, 'messages array is required');
-  }
-
+  // Zod already validated: messages is array of {role, content}, tone is valid enum
+  // Additional business logic check:
   if (messages.length > config.MAX_MESSAGES_PER_REQUEST) {
     throw new HTTPError(400, `Too many messages in request. Max ${config.MAX_MESSAGES_PER_REQUEST}.`);
   }
 
-  // Validate individual messages — prevent oversized content and missing fields
+  // Legacy manual validation kept as defense-in-depth (can be removed later)
   const MAX_MSG_LENGTH = 4000;
   for (const msg of messages) {
     if (!msg.role || typeof msg.role !== 'string') {
