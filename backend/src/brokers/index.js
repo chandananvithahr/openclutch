@@ -176,6 +176,28 @@ const adapters = [
       }));
     },
   },
+
+  {
+    name: 'Groww',
+
+    async isConnected(userId) {
+      const g = require('../routes/groww');
+      return !!(await g.getAccessToken(userId));
+    },
+
+    async getHoldings(userId) {
+      const g   = require('../routes/groww');
+      const raw = await g.fetchHoldings(userId);
+      return raw.map(h => normalizeHolding({
+        symbol:       h.symbol,
+        name:         h.name,
+        qty:          h.qty,
+        currentPrice: h.current_price,
+        avgPrice:     h.buy_price,
+        broker:       'Groww',
+      }));
+    },
+  },
 ];
 
 // ─── Unified portfolio ────────────────────────────────────────────────────────

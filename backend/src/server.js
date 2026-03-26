@@ -39,6 +39,7 @@ const workflowRoutes     = require('./routes/workflows');
 const onboardingRoutes   = require('./routes/onboarding');
 const filesRoutes        = require('./routes/files');
 const driveRoutes        = require('./routes/drive');
+const growwRoutes        = require('./routes/groww');
 
 // Workflow registry + scheduler (registers all workflows in engine)
 const { scheduler }   = require('./workflows');
@@ -101,6 +102,7 @@ app.use('/api/workflows',  workflowRoutes);
 app.use('/api/onboarding', onboardingRoutes);
 app.use('/api/files',     filesRoutes);
 app.use('/api/drive',     driveRoutes);
+app.use('/api/groww',     growwRoutes);
 
 // Centralized error handler — listmonk pattern (must be last)
 app.use(errorMiddleware);
