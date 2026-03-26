@@ -45,7 +45,10 @@ router.post('/connect', async (req, res) => {
 
   try {
     const api = createSmartApi();
-    const session = await api.generateSession(clientId, password, totp);
+    const session = await Promise.race([
+      api.generateSession(clientId, password, totp),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Angel One API timeout — check ANGEL_ONE_API_KEY in Railway env vars')), 15000)),
+    ]);
 
     if (!session.data?.jwtToken) {
       return res.status(401).json({ error: 'Angel One login failed. Check your credentials.' });
