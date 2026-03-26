@@ -76,9 +76,10 @@ app.get('/health', async (req, res) => {
   const supabase = require('./lib/supabase');
   const { error } = await supabase.from('messages').select('id').limit(1);
   res.json({
-    status: error ? 'degraded' : 'ok',
-    app:    'Clutch Backend',
-    db:     error ? `error: ${error.message}` : 'connected',
+    status:  error ? 'degraded' : 'ok',
+    app:     'Clutch Backend',
+    version: 'v2-auth',
+    db:      error ? `error: ${error.message}` : 'connected',
   });
 });
 
