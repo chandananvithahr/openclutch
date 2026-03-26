@@ -16,6 +16,7 @@ const { issueToken } = require('../middleware/auth');
 const logger   = require('../lib/logger');
 const { validate, signupSchema, loginSchema } = require('../lib/validation');
 const supabase = require('../lib/supabase');
+const { asyncHandler, HTTPError } = require('../middleware/errors');
 
 const BOOTSTRAP_SECRET = process.env.AUTH_BOOTSTRAP_SECRET;
 const BCRYPT_ROUNDS = 10;
@@ -45,7 +46,7 @@ setInterval(() => {
 
 // ─── POST /signup ───────────────────────────────────────────────────────────
 
-router.post('/signup', async (req, res) => {
+router.post('/signup', asyncHandler(async (req, res) => {
   const clientIP = req.ip || req.headers['x-forwarded-for'] || 'unknown';
 
   if (!checkIPLimit(clientIP)) {
@@ -57,60 +58,61 @@ router.post('/signup', async (req, res) => {
     return res.status(400).json({ error: valError });
   }
 
-  try {
-    // Check if email already exists
-    const { data: existing } = await supabase
-      .from('user_profiles')
-      .select('user_id')
-      .eq('email', body.email)
-      .single();
+  // Check if email already exists (ignore RLS errors — treat as "no user found")
+  const { data: existing, error: checkError } = await supabase
+    .from('user_profiles')
+    .select('user_id')
+    .eq('email', body.email)
+    .single();
 
-    if (existing) {
-      return res.status(409).json({ error: 'An account with this email already exists.' });
-    }
-
-    // Hash password
-    const passwordHash = await bcrypt.hash(body.password, BCRYPT_ROUNDS);
-
-    // Generate a stable user_id from email (deterministic, no UUID dependency)
-    const userId = `user_${body.email.replace(/[^a-z0-9]/gi, '_')}`;
-
-    // Create user profile
-    const { error: insertError } = await supabase
-      .from('user_profiles')
-      .insert({
-        user_id: userId,
-        email: body.email,
-        name: body.name,
-        password_hash: passwordHash,
-        profile_completeness: 10,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-
-    if (insertError) {
-      logger.error('Signup DB error', { err: insertError.message, email: body.email });
-      return res.status(500).json({ error: 'Could not create account. Please try again.' });
-    }
-
-    const token = issueToken(userId);
-    logger.info('User signed up', { userId: userId.slice(0, 12) + '...' });
-
-    res.status(201).json({
-      token,
-      expiresIn: '30d',
-      userId,
-      message: 'Account created successfully.',
-    });
-  } catch (err) {
-    logger.error('Signup failed', { err: err.message });
-    res.status(500).json({ error: 'Could not create account. Please try again.' });
+  if (checkError && checkError.code !== 'PGRST116') {
+    // PGRST116 = no rows found (expected). Anything else = DB error.
+    logger.error('Signup email check error', { code: checkError.code, msg: checkError.message });
+    // Don't block signup — treat as no existing user (fail open on check, fail closed on insert)
   }
-});
+
+  if (existing) {
+    return res.status(409).json({ error: 'An account with this email already exists.' });
+  }
+
+  // Hash password
+  const passwordHash = await bcrypt.hash(body.password, BCRYPT_ROUNDS);
+
+  // Generate a stable user_id from email (deterministic, no UUID dependency)
+  const userId = `user_${body.email.replace(/[^a-z0-9]/gi, '_')}`;
+
+  // Create user profile
+  const { error: insertError } = await supabase
+    .from('user_profiles')
+    .insert({
+      user_id: userId,
+      email: body.email,
+      name: body.name,
+      password_hash: passwordHash,
+      profile_completeness: 10,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+  if (insertError) {
+    logger.error('Signup insert error', { code: insertError.code, msg: insertError.message });
+    return res.status(500).json({ error: 'Could not create account. Please try again.' });
+  }
+
+  const token = issueToken(userId);
+  logger.info('User signed up', { userId: userId.slice(0, 12) + '...' });
+
+  res.status(201).json({
+    token,
+    expiresIn: '30d',
+    userId,
+    message: 'Account created successfully.',
+  });
+}));
 
 // ─── POST /login ────────────────────────────────────────────────────────────
 
-router.post('/login', async (req, res) => {
+router.post('/login', asyncHandler(async (req, res) => {
   const clientIP = req.ip || req.headers['x-forwarded-for'] || 'unknown';
 
   if (!checkIPLimit(clientIP)) {
@@ -122,40 +124,35 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ error: valError });
   }
 
-  try {
-    // Find user by email
-    const { data: user, error: findError } = await supabase
-      .from('user_profiles')
-      .select('user_id, password_hash, name')
-      .eq('email', body.email)
-      .single();
+  // Find user by email
+  const { data: user, error: findError } = await supabase
+    .from('user_profiles')
+    .select('user_id, password_hash, name')
+    .eq('email', body.email)
+    .single();
 
-    if (findError || !user || !user.password_hash) {
-      // Deliberately vague — don't reveal whether email exists
-      return res.status(401).json({ error: 'Invalid email or password.' });
-    }
-
-    // Verify password
-    const valid = await bcrypt.compare(body.password, user.password_hash);
-    if (!valid) {
-      logger.warn('Login failed — wrong password', { ip: clientIP });
-      return res.status(401).json({ error: 'Invalid email or password.' });
-    }
-
-    const token = issueToken(user.user_id);
-    logger.info('User logged in', { userId: user.user_id.slice(0, 12) + '...' });
-
-    res.json({
-      token,
-      expiresIn: '30d',
-      userId: user.user_id,
-      name: user.name,
-    });
-  } catch (err) {
-    logger.error('Login failed', { err: err.message });
-    res.status(500).json({ error: 'Login failed. Please try again.' });
+  if (findError || !user || !user.password_hash) {
+    // Deliberately vague — don't reveal whether email exists
+    return res.status(401).json({ error: 'Invalid email or password.' });
   }
-});
+
+  // Verify password
+  const valid = await bcrypt.compare(body.password, user.password_hash);
+  if (!valid) {
+    logger.warn('Login failed — wrong password', { ip: clientIP });
+    return res.status(401).json({ error: 'Invalid email or password.' });
+  }
+
+  const token = issueToken(user.user_id);
+  logger.info('User logged in', { userId: user.user_id.slice(0, 12) + '...' });
+
+  res.json({
+    token,
+    expiresIn: '30d',
+    userId: user.user_id,
+    name: user.name,
+  });
+}));
 
 // ─── POST /token (legacy bootstrap — admin/dev only) ───────────────────────
 
