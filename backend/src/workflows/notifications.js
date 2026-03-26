@@ -14,6 +14,7 @@
 //   workflow_error      — a background workflow failed
 //   job_update          — new job email detected
 //   salary_detected     — salary credit found
+//   stealth_insight     — proactive cross-domain pattern insight
 
 'use strict';
 
@@ -117,6 +118,14 @@ const notifications = {
     return notify(userId, 'salary_detected',
       `Salary credit detected: ₹${amount.toLocaleString('en-IN')} from ${bank} on ${date}.`,
       { amount, bank, date }, 'high');
+  },
+
+  // Cross-domain stealth insight (proactive — user didn't ask)
+  stealthInsight(userId, insight, pattern, domains, confidence) {
+    return notify(userId, 'stealth_insight',
+      insight,
+      { pattern, domains, confidence },
+      confidence >= 0.85 ? 'high' : 'normal');
   },
 
   // Background workflow error (shown only in debug/settings)

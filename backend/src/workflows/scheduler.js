@@ -41,6 +41,12 @@ function isSundayMorning() {
   return ist.getDay() === 0 && ist.getHours() === 9 && ist.getMinutes() < 5;
 }
 
+// Fires at 20:00 IST daily — stealth insights notification window
+function isEveningWindow() {
+  const ist = nowIST();
+  return ist.getHours() === 20 && ist.getMinutes() < 5;
+}
+
 // ─── Interval references (for clean shutdown) ─────────────────────────────────
 
 const intervals = [];
@@ -76,6 +82,11 @@ const SCHEDULES = [
     name:     'weeklyReview',
     interval: 60 * 60 * 1000,   // check every hour, but fire only on Sunday 09:xx IST
     guard:    isSundayMorning,
+  },
+  {
+    name:     'stealthInsights',
+    interval: 60 * 60 * 1000,   // check every hour, fire at 20:00 IST daily
+    guard:    isEveningWindow,
   },
 ];
 

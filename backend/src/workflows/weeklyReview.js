@@ -12,6 +12,7 @@ const { WorkflowGraph, END } = require('./engine');
 const { notifications }      = require('./notifications');
 const repos                  = require('../repositories');
 const brokers                = require('../brokers');
+const patterns               = require('../services/patterns');
 const logger                 = require('../lib/logger');
 const { chat }               = require('../lib/ai');
 const config                 = require('../lib/config');
@@ -154,6 +155,28 @@ async function gatherJournal(state) {
   return { journalAvailable: true, dominantMood, avgEnergy, journalDays: data.length };
 }
 
+// ─── Cross-domain patterns (THE MOAT) ────────────────────────────────────────
+
+async function gatherPatterns(state) {
+  const { userId } = state;
+
+  try {
+    const result = await patterns.detectPatterns(userId, 30);
+    if (!result?.patterns?.length) return { patternsAvailable: false, detectedPatterns: [] };
+
+    logger.info('weeklyReview:gatherPatterns', { userId, count: result.patterns.length });
+
+    return {
+      patternsAvailable: true,
+      detectedPatterns:  result.patterns,
+      patternsSummary:   result.summary,
+    };
+  } catch (err) {
+    logger.warn('weeklyReview:gatherPatterns failed', { userId, err: err.message });
+    return { patternsAvailable: false, detectedPatterns: [] };
+  }
+}
+
 // ─── Compose with AI ──────────────────────────────────────────────────────────
 
 async function compose(state) {
@@ -163,6 +186,7 @@ async function compose(state) {
     avgSteps, avgSleep, avgHR, activeDays, healthAvailable, lowSleepDays,
     portfolioAvailable, portfolioValue, weeklyPnl, weeklyPnlPct, topGainer, topLoser,
     journalAvailable, dominantMood, avgEnergy,
+    patternsAvailable, detectedPatterns,
     weekRange,
   } = state;
 
@@ -200,16 +224,21 @@ ${avgEnergy ? `- Avg energy level: ${avgEnergy}/5` : ''}
 - Logged ${state.journalDays} journal entries`);
   }
 
-  // Cross-domain pattern hints for AI
+  // Cross-domain patterns from the detection engine (THE MOAT)
   const crossDomainHints = [];
-  if (healthAvailable && lowSleepDays > 2 && thisWeekSpend > lastWeekSpend) {
-    crossDomainHints.push('Sleep was low AND spending was up this week — possible stress spending pattern');
+  if (patternsAvailable && detectedPatterns?.length) {
+    for (const p of detectedPatterns) {
+      crossDomainHints.push(`[${p.domains.join('→')}] ${p.insight} (confidence: ${Math.round(p.confidence * 100)}%)`);
+    }
   }
-  if (journalAvailable && dominantMood === 'stressed' && thisWeekSpend > lastWeekSpend * 1.2) {
-    crossDomainHints.push('Stressed mood correlated with 20%+ higher spending');
-  }
-  if (healthAvailable && avgSteps > 8000 && portfolioAvailable && weeklyPnl > 0) {
-    crossDomainHints.push('High activity week AND positive portfolio — good week overall');
+  // Fallback: simple heuristics if pattern engine returned nothing
+  if (!crossDomainHints.length) {
+    if (healthAvailable && lowSleepDays > 2 && thisWeekSpend > lastWeekSpend) {
+      crossDomainHints.push('Sleep was low AND spending was up this week — possible stress spending pattern');
+    }
+    if (journalAvailable && dominantMood === 'stressed' && thisWeekSpend > lastWeekSpend * 1.2) {
+      crossDomainHints.push('Stressed mood correlated with 20%+ higher spending');
+    }
   }
 
   const prompt = `Write a Sunday Briefing for the user. Tone: direct, warm, like a smart friend reviewing your week with you.
@@ -296,12 +325,14 @@ function createWeeklyReviewWorkflow() {
     .addNode('gatherHealth',    gatherHealth)
     .addNode('gatherPortfolio', gatherPortfolio)
     .addNode('gatherJournal',   gatherJournal)
+    .addNode('gatherPatterns',  gatherPatterns)
     .addNode('compose',         compose)
     .addNode('notifyUser',      notifyUser)
     .addEdge('gatherSpending',  'gatherHealth')
     .addEdge('gatherHealth',    'gatherPortfolio')
     .addEdge('gatherPortfolio', 'gatherJournal')
-    .addEdge('gatherJournal',   'compose')
+    .addEdge('gatherJournal',   'gatherPatterns')
+    .addEdge('gatherPatterns',  'compose')
     .addEdge('compose',         'notifyUser')
     .addEdge('notifyUser',      END)
     .setEntry('gatherSpending');

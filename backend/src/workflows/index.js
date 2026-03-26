@@ -6,6 +6,7 @@
 //   runWorkflow('portfolioSync', { userId })
 //   runWorkflow('healthSync', { metrics, userId })
 //   runWorkflow('weeklyReview', { userId })
+//   runWorkflow('stealthInsights', { userId })
 
 'use strict';
 
@@ -16,7 +17,8 @@ register('smsIngestion',  require('./smsIngestion'));
 register('emailSync',     require('./emailSync'));
 register('portfolioSync', require('./portfolioSync'));
 register('healthSync',    require('./healthSync'));
-register('weeklyReview',  require('./weeklyReview'));
+register('weeklyReview',      require('./weeklyReview'));
+register('stealthInsights',  require('./stealthInsights'));
 
 // Re-export engine API so callers only need to require('./workflows')
 module.exports = {
