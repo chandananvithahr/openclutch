@@ -25,8 +25,6 @@ const zerodhaRoutes  = require('./routes/zerodha');
 const angeloneRoutes = require('./routes/angelone');
 const upstoxRoutes   = require('./routes/upstox');
 const fyersRoutes    = require('./routes/fyers');
-const dhanRoutes      = require('./routes/dhan');
-const fivepaisaRoutes = require('./routes/fivepaisa');
 const gmailRoutes    = require('./routes/gmail');
 const calendarRoutes = require('./routes/calendar');
 const whatsappRoutes = require('./routes/whatsapp');
@@ -39,7 +37,6 @@ const workflowRoutes     = require('./routes/workflows');
 const onboardingRoutes   = require('./routes/onboarding');
 const filesRoutes        = require('./routes/files');
 const driveRoutes        = require('./routes/drive');
-const growwRoutes        = require('./routes/groww');
 
 // Workflow registry + scheduler (registers all workflows in engine)
 const { scheduler }   = require('./workflows');
@@ -88,8 +85,6 @@ app.use('/api/zerodha',   zerodhaRoutes);
 app.use('/api/angelone',  angeloneRoutes);
 app.use('/api/upstox',    upstoxRoutes);
 app.use('/api/fyers',     fyersRoutes);
-app.use('/api/dhan',      dhanRoutes);
-app.use('/api/fivepaisa', fivepaisaRoutes);
 app.use('/api/gmail',     gmailRoutes);
 app.use('/api/calendar',  calendarRoutes);
 app.use('/api/whatsapp',  whatsappRoutes);
@@ -102,7 +97,6 @@ app.use('/api/workflows',  workflowRoutes);
 app.use('/api/onboarding', onboardingRoutes);
 app.use('/api/files',     filesRoutes);
 app.use('/api/drive',     driveRoutes);
-app.use('/api/groww',     growwRoutes);
 
 // Centralized error handler — listmonk pattern (must be last)
 app.use(errorMiddleware);
