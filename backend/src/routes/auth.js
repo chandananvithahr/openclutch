@@ -218,7 +218,31 @@ router.get('/ping', asyncHandler(async (req, res) => {
     steps.supabase_select = `THROW: ${e.message}`;
   }
 
-  // Step 3: issueToken
+  // Step 3: supabase insert with timeout
+  try {
+    const insertPromise = supabase
+      .from('user_profiles')
+      .insert({
+        user_id: 'test_diag_user',
+        email: 'diag_test@openclutch.app',
+        name: 'Diag Test',
+        password_hash: '$2b$10$fake_hash_for_testing_only_xx',
+        profile_completeness: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('INSERT_TIMEOUT_10s')), 10000)
+    );
+    const { error: ie } = await Promise.race([insertPromise, timeoutPromise]);
+    steps.supabase_insert = ie ? `error code=${ie.code} msg=${ie.message}` : 'ok';
+    // Clean up test row
+    if (!ie) await supabase.from('user_profiles').delete().eq('user_id', 'test_diag_user');
+  } catch (e) {
+    steps.supabase_insert = `THROW: ${e.message}`;
+  }
+
+  // Step 4: issueToken
   try {
     const t = issueToken('test_user_diag');
     steps.issue_token = `ok (${t.length} chars)`;
