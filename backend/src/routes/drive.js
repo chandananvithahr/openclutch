@@ -158,8 +158,13 @@ router.get('/files', asyncHandler(async (req, res) => {
     .map(m => `mimeType='${m}'`)
     .join(' or ');
 
-  const q = query
-    ? `(${mimeFilter}) and name contains '${query.replace(/'/g, "\\'")}' and trashed=false`
+  // Escape quotes and backslashes in user query to prevent Drive API query injection
+  const safeQuery = query
+    ? query.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+    : null;
+
+  const q = safeQuery
+    ? `(${mimeFilter}) and name contains '${safeQuery}' and trashed=false`
     : `(${mimeFilter}) and trashed=false`;
 
   const response = await drive.files.list({
