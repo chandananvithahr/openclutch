@@ -412,6 +412,36 @@ When user mentions a date, ALWAYS use after:/before: operators. When user says "
       },
     },
   },
+  // --- Cross-Domain Intelligence (THE MOAT) ---
+  {
+    type: 'function',
+    function: {
+      name: 'get_cross_domain_patterns',
+      description: 'Detect cross-domain patterns across health, spending, mood, and activity data. THE MOAT — insights no single-domain app can produce. Examples: "you spend 2x more on days you sleep under 6 hours", "every time you order food after 10pm, you skip exercise next morning", "stressed days = 40% more spending". Use when user asks "show me patterns", "what connections do you see", "any insights across my data", "how does my sleep affect spending", or proactively during weekly reviews and daily check-ins.',
+      parameters: {
+        type: 'object',
+        properties: {
+          days: { type: 'number', description: 'Number of days to analyze (default 30, max 90)' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'can_i_afford',
+      description: 'Purchase advisor with real financial context — "Can I afford this?" answered with actual salary, spending, remaining budget, portfolio value. Use when user asks "can I afford [item]", "should I buy [item]", "is [item] worth it", "can I spend ₹X on [item]", or any purchase decision question.',
+      parameters: {
+        type: 'object',
+        properties: {
+          item_name: { type: 'string', description: 'Name of the item or purchase e.g. "iPhone 16", "gym membership", "vacation to Goa"' },
+          item_price: { type: 'number', description: 'Price of the item in INR e.g. 79900, 3000, 25000' },
+        },
+        required: ['item_name', 'item_price'],
+      },
+    },
+  },
 ];
 
 module.exports = tools;

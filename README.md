@@ -77,7 +77,7 @@ A 60-second weekly report across all domains:
 │  Backend (Node.js + Express)                                │
 │                                                             │
 │  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐  │
-│  │ 27 AI Tools │  │ 3-Tier Memory│  │ Workflow Engine    │  │
+│  │ 29 AI Tools │  │ 3-Tier Memory│  │ Workflow Engine    │  │
 │  │ GPT-4o-mini │  │ Window+LLM   │  │ DeerFlow2 pattern │  │
 │  │ Tool calling│  │ +Facts(pgvec)│  │ Email/Portfolio/   │  │
 │  └─────────────┘  └──────────────┘  │ Health/Weekly sync │  │
@@ -99,7 +99,7 @@ A 60-second weekly report across all domains:
 User types message
   → POST /api/chat/stream (SSE)
   → Load user facts (long-term memory) + conversation window
-  → Send to GPT-4o-mini with 27 tool schemas
+  → Send to GPT-4o-mini with 29 tool schemas
   → If tool called → executor routes to real function (cached)
   → Stream response back to mobile
   → Save to Supabase
@@ -123,7 +123,7 @@ The AI doesn't hallucinate about your finances — it calls real APIs and return
 ## What's Built
 
 - **4 broker integrations** — Zerodha, Angel One, Fyers, Upstox (tested with real portfolio data)
-- **27 AI tools** — spending analysis, portfolio tracking, health correlation, career scoring, journal insights
+- **29 AI tools** — spending analysis, portfolio tracking, health correlation, career scoring, journal insights, cross-domain patterns, purchase advisor
 - **3-tier memory** — sliding window + LLM summary + GPT-extracted facts (pgvector)
 - **Workflow engine** — background email sync, portfolio sync, health sync, weekly review
 - **Bank SMS parsing** — 150+ Indian merchants auto-categorized
@@ -167,8 +167,8 @@ See [Contributing](docs/CONTRIBUTING.md) for the full setup guide.
 
 ## Roadmap
 
-- [ ] Cross-domain pattern detection engine
-- [ ] "Should I buy X?" purchase advisor with real financial context
+- [x] Cross-domain pattern detection engine
+- [x] "Should I buy X?" purchase advisor with real financial context
 - [ ] Account Aggregator (AA) integration (Finvu/OneMoney)
 - [ ] Play Store internal testing track
 

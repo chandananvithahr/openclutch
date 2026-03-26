@@ -26,7 +26,7 @@
 ### What's Built ✅
 - Backend: Express server, all routes (chat, zerodha, angelone, upstox, fyers, gmail, calendar, sms, cas, journal, career, health, workflows, onboarding, files, drive)
 - 3-tier memory system (sliding window + LLM summary + GPT facts)
-- 27 AI tools defined + executor routing
+- 29 AI tools defined + executor routing
 - Workflow engine (DeerFlow2 pattern): emailSync, portfolioSync, healthSync, weeklyReview, smsIngestion
 - Broker adapters: Zerodha ✅, Angel One ✅, Upstox ✅, Fyers ✅ (4 OAuth-scalable brokers)
 - **Removed:** Groww, Dhan, 5paisa (non-scalable per-user API key model — not suitable for millions of users)
@@ -95,7 +95,7 @@ Hooks are active at `.claude/settings.json`:
 
 Personal AI assistant for Indian users (28–35). Chat-first interface. 6 life domains: Money, Wealth, Career, Health, Mind, Time. Connects to 4 brokers (Zerodha, Angel One, Upstox, Fyers), Gmail, bank SMS, health data, mutual funds. The moat is **cross-domain intelligence** — insights no single-domain app can provide.
 
-Backend: Node.js + Express. Mobile: React Native + Expo (Android-first). AI: OpenAI GPT-4o-mini with 21+ tools.
+Backend: Node.js + Express. Mobile: React Native + Expo (Android-first). AI: OpenAI GPT-4o-mini with 29 tools.
 
 Full product vision, strategy, and 10-day sprint plan: **`docs/VISION.md`**
 
@@ -406,7 +406,7 @@ Defined in `backend/src/lib/ai.js` → `TONE_PROMPTS`
 | Arogya | Health | Steps, sleep, heart rate, health-spending correlation |
 | Kaal | Time | Calendar, meetings, free slots, schedule awareness |
 
-## Current Tools (27 total)
+## Current Tools (29 total)
 | Tool | Agent | What it does |
 |------|-------|-------------|
 | `get_portfolio` | Vriddhi | All connected broker holdings merged (via brokers/index.js) |
@@ -436,6 +436,8 @@ Defined in `backend/src/lib/ai.js` → `TONE_PROMPTS`
 | `get_today_schedule` | Kaal | Today's meetings, free hours, event list |
 | `get_upcoming_events` | Kaal | Next N days calendar events grouped by day |
 | `get_free_slots` | Kaal | Free time slots today (30min+ blocks, 9am-6pm) |
+| `get_cross_domain_patterns` | Cross-Domain | THE MOAT — sleep→spending, mood→portfolio, activity→savings patterns |
+| `can_i_afford` | Cross-Domain | "Can I afford X?" with real salary, spending, portfolio context |
 
 ## Architecture Layers
 | Layer | File | Purpose |

@@ -8,6 +8,7 @@ const screener     = require('../services/screener');
 const journal      = require('../routes/journal');
 const career       = require('../routes/career');
 const health       = require('../routes/health');
+const patterns     = require('../services/patterns');
 const brokers      = require('../brokers');
 const repos        = require('../repositories');
 const yahooFinance = require('yahoo-finance2').default;
@@ -84,6 +85,12 @@ async function executeTool(toolName, toolArgs, userContext) {
       return await health.getHealthSummary(userContext.userId, toolArgs.days || 7);
     case 'get_health_spending_correlation':
       return await health.getHealthSpendingCorrelation(userContext.userId, toolArgs.days || 30);
+    // --- Cross-Domain Intelligence (THE MOAT) ---
+    case 'get_cross_domain_patterns':
+      return await withCache(`patterns:${userContext.userId}:${toolArgs.days || 30}`, TTL.FINANCIALS,
+        () => patterns.detectPatterns(userContext.userId, Math.min(toolArgs.days || 30, 90)));
+    case 'can_i_afford':
+      return await patterns.canIAfford(userContext.userId, toolArgs.item_name, toolArgs.item_price);
     default:
       return { error: `Unknown tool: ${toolName}` };
   }
