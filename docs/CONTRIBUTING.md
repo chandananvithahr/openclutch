@@ -68,7 +68,13 @@ npx expo run:android   # real device or emulator
 | `ZERODHA_API_KEY` | For Zerodha | Kite Connect API key |
 | `ZERODHA_API_SECRET` | For Zerodha | Kite Connect API secret |
 | `ANGEL_ONE_API_KEY` | For Angel One | SmartAPI key |
+| `UPSTOX_API_KEY` | For Upstox | Upstox API v2 key |
+| `UPSTOX_API_SECRET` | For Upstox | Upstox API v2 secret |
+| `FYERS_APP_ID` | For Fyers | Fyers API v3 app ID |
+| `FYERS_SECRET_ID` | For Fyers | Fyers API v3 secret |
+| `JWT_SECRET` | Yes | JWT signing secret for auth |
 | `CASPARSER_API_KEY` | For MF | Use `sandbox-with-json-responses` for testing |
+| `CALENDAR_REDIRECT_URI` | For Calendar | Google Calendar OAuth callback |
 | `PORT` | No | Server port (default: 3000) |
 | `LOG_LEVEL` | No | `debug`, `info`, `warn`, `error` (default: info) |
 | `ALLOWED_ORIGINS` | No | Comma-separated allowed CORS origins (default: localhost) |

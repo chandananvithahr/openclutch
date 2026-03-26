@@ -2,7 +2,7 @@
 
 ## Overview
 
-Personal AI assistant backend for Indian users. Node.js + Express API consumed by a React Native Android app. AI routing via OpenAI tool-calling. 5 domain agents (Vriddhi, Artha, Chitta, Karma, Arogya).
+Personal AI assistant backend for Indian users. Node.js + Express API consumed by a React Native Android app. AI routing via OpenAI tool-calling. 6 domain agents (Vriddhi, Artha, Chitta, Karma, Arogya, Kaal). Live on Railway.
 
 ---
 
@@ -13,26 +13,29 @@ server.js          ← HTTP entry, CORS, graceful shutdown
   │
   ├─ routes/       ← Thin HTTP handlers (validate, call services, respond)
   │   ├─ chat.js   ← Core AI loop: memory → OpenAI → tool dispatch → response
-  │   ├─ zerodha.js / angelone.js  ← Broker OAuth + token storage
+  │   ├─ zerodha.js / angelone.js / upstox.js / fyers.js  ← 4 broker OAuth + token storage
   │   ├─ gmail.js  ← Google OAuth + email fetch
   │   ├─ calendar.js ← Google Calendar OAuth + schedule/free slots (Kaal agent)
   │   ├─ sms.js    ← Bank SMS + email transaction sync
   │   ├─ journal.js / career.js / health.js / cas.js
-  │   └─ whatsapp.js (deferred)
+  │   ├─ onboarding.js ← Cleo-style user profiling
+  │   ├─ workflows.js ← Background workflow triggers + notifications
+  │   ├─ files.js ← File upload + AI analysis (PDF, Excel, CSV)
+  │   └─ drive.js ← Google Drive OAuth2 + file listing + AI analysis
   │
   ├─ tools/
   │   ├─ index.js     ← OpenAI tool schema definitions (27 tools)
   │   └─ executor.js  ← Routes tool calls to real functions + cache layer
   │
   ├─ brokers/
-  │   └─ index.js  ← Adapter pattern: 6 brokers → unified getPortfolio()
+  │   └─ index.js  ← Adapter pattern: 4 brokers → unified getPortfolio()
   │
   ├─ memory/
   │   ├─ window.js ← Tier 1+2: sliding window (8 verbatim) + LLM summarization
   │   └─ facts.js  ← Tier 3: GPT-extracted facts persisted to user_facts table
   │
   ├─ repositories/
-  │   └─ index.js  ← All Supabase table access: messages, userFacts, transactions, connectedApps
+  │   └─ index.js  ← All Supabase table access: messages, userFacts, transactions, connectedApps, healthData, userProfiles
   │
   ├─ middleware/
   │   ├─ errors.js    ← HTTPError class + asyncHandler + centralized errorMiddleware
@@ -65,15 +68,15 @@ server.js          ← HTTP entry, CORS, graceful shutdown
 **Problem:** 60-line `getPortfolio()` in executor.js duplicated Zerodha + Angel One merging logic.
 **Solution:** `brokers/index.js` defines `adapters[]` with uniform `isConnected()` + `getHoldings()` interface. `normalizeHolding()` produces a consistent shape.
 **Adding a new broker:** Add one entry to `adapters[]`. No other changes needed.
-**Planned brokers (6 total, ~90% market coverage):**
+**4 OAuth-scalable brokers (~90% of Indian retail traders):**
 | Broker | API | Auth | Status |
 |--------|-----|------|--------|
-| Zerodha | KiteConnect | OAuth2 | ✅ Built |
-| Angel One | SmartAPI | TOTP | ✅ Built |
-| Upstox | Upstox API v2 | OAuth2 | ⬜ Next |
-| Fyers | Fyers API v3 | OAuth2 | ⬜ Planned |
-| Dhan | DhanHQ | Access Token | ⬜ Planned |
-| 5paisa | 5paisa API | OAuth2+TOTP | ⬜ Planned |
+| Zerodha | KiteConnect | OAuth2 | ✅ Built + Tested |
+| Angel One | SmartAPI | TOTP | ✅ Built + Tested |
+| Upstox | Upstox API v2 | OAuth2 | ✅ Built |
+| Fyers | Fyers API v3 | OAuth2 | ✅ Built + Tested |
+
+Groww, Dhan, 5paisa were removed — non-scalable per-user API key model.
 
 ### 3. Centralized Config (dns.toys)
 **Problem:** Magic numbers in 5 different files (`KEEP_VERBATIM=8` in window.js, `MAX_REQUESTS=20` in rateLimit.js, TTLs in cache.js, etc.)
@@ -104,7 +107,21 @@ Cache wraps expensive calls (portfolio, financials) to avoid redundant broker AP
 
 ### 8. Graceful Shutdown
 `server.js` listens for `SIGTERM`/`SIGINT`, closes HTTP server, exits cleanly after 10s max.
-Required for Railway/Heroku zero-downtime deploys.
+Required for Railway zero-downtime deploys.
+
+### 9. Workflow Engine (DeerFlow2 Pattern)
+`workflows/engine.js` — directed graph: nodes → edges → state → retry.
+Each workflow is a sequence of typed nodes (validate, fetch, transform, store, notify).
+Scheduler runs background jobs: emailSync (30min), portfolioSync (15min), healthSync (1hr), weeklyReview (Sun 9am IST).
+Notifications stored in Supabase, surfaced via in-app notification bell.
+
+### 10. JWT Auth
+All routes require `Authorization: Bearer <jwt>` header. Token generated at login, verified in middleware.
+Mobile stores JWT in AsyncStorage, sends with every request.
+
+### 11. SSE Streaming Chat
+`POST /api/chat/stream` uses Server-Sent Events for real-time response streaming.
+Mobile renders markdown incrementally via `react-native-markdown-display`.
 
 ---
 
@@ -176,16 +193,18 @@ See `docs/VISION.md` → "Onboarding — Cleo AI-Inspired Experience" for full s
 | Table | Purpose | Status |
 |-------|---------|--------|
 | `messages` | Chat history | ✅ |
-| `user_facts` | Tier 3 memory | ✅ |
-| `connected_apps` | OAuth tokens | ✅ |
-| `sms_transactions` | Bank transactions | ✅ |
-| `user_profiles` | Onboarding profile data (name, age, salary, etc.) | ⬜ Run SQL |
-| `journal_entries` | Daily journal + mood | ⬜ Run SQL |
-| `career_profiles` | Parsed resume | ⬜ Run SQL |
-| `job_applications` | Application tracker | ⬜ Run SQL |
-| `health_data` | Health metrics | ⬜ Run SQL |
+| `user_facts` | Tier 3 memory (pgvector) | ✅ |
+| `connected_apps` | OAuth tokens + portfolio snapshots | ✅ |
+| `sms_transactions` | Bank SMS + email parsed transactions | ✅ |
+| `user_profiles` | Onboarding profile (name, age, salary, EMI, fitness, assets) | ✅ |
+| `notifications` | In-app notifications for all agents | ✅ |
+| `journal_entries` | Daily journal + mood | ✅ |
+| `career_profiles` | Parsed resume | ✅ |
+| `job_applications` | Application tracker | ✅ |
+| `health_data` | Daily health metrics (steps, sleep, HR) | ✅ |
+| `memories` | Semantic memory (pgvector) | ✅ |
 
-Run `backend/sql/indexes_and_rls.sql` in Supabase for performance indexes.
+All tables have RLS enabled. Run `backend/sql/indexes_and_rls.sql` for performance indexes.
 
 ---
 
@@ -194,25 +213,22 @@ Run `backend/sql/indexes_and_rls.sql` in Supabase for performance indexes.
 ```env
 OPENAI_API_KEY=          # Required — gpt-4o-mini
 SUPABASE_URL=            # Required — your project URL
-SUPABASE_ANON_KEY=       # Required — anon key (backend uses service_role implicitly)
-ZERODHA_API_KEY=         # Broker
+SUPABASE_ANON_KEY=       # Required — anon key
+JWT_SECRET=              # Required — for user auth
+ZERODHA_API_KEY=         # Broker — Kite Connect
 ZERODHA_API_SECRET=      # Broker
-GOOGLE_CLIENT_ID=        # Gmail OAuth
-GOOGLE_CLIENT_SECRET=    # Gmail OAuth
-GMAIL_REDIRECT_URI=      # Gmail OAuth callback
-ANGEL_ONE_API_KEY=       # Broker
-UPSTOX_API_KEY=          # Broker
+ANGEL_ONE_API_KEY=       # Broker — SmartAPI
+UPSTOX_API_KEY=          # Broker — Upstox API v2
 UPSTOX_API_SECRET=       # Broker
-FYERS_APP_ID=            # Broker
+FYERS_APP_ID=            # Broker — Fyers API v3
 FYERS_SECRET_ID=         # Broker
-DHAN_CLIENT_ID=          # Broker
-DHAN_ACCESS_TOKEN=       # Broker
-FIVEPAISA_APP_NAME=      # Broker
-FIVEPAISA_APP_SOURCE=    # Broker
-FIVEPAISA_USER_KEY=      # Broker
-FIVEPAISA_ENCRYPTION_KEY= # Broker
-CASPARSER_API_KEY=       # MF portfolio
+GOOGLE_CLIENT_ID=        # Gmail + Calendar + Drive OAuth
+GOOGLE_CLIENT_SECRET=    # Gmail + Calendar + Drive OAuth
+GMAIL_REDIRECT_URI=      # Gmail OAuth callback
+CALENDAR_REDIRECT_URI=   # Calendar OAuth callback
+CASPARSER_API_KEY=       # MF portfolio (sandbox-with-json-responses for testing)
 PORT=3000                # Default 3000
 LOG_LEVEL=info           # error|warn|info|debug
 ALLOWED_ORIGINS=         # Comma-separated (defaults to localhost)
+SCHEDULER_USER_IDS=      # Comma-separated user IDs for background workflows
 ```
