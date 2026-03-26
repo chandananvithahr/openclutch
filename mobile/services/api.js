@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import BACKEND_URL from './config';
+import BACKEND_URL, { AUTH_BOOTSTRAP_SECRET } from './config';
 
 const TOKEN_KEY = 'clutch_jwt_token';
 
@@ -23,7 +23,7 @@ export async function bootstrapAuth(userId) {
   const res = await fetch(`${BACKEND_URL}/api/auth/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify({ userId, secret: AUTH_BOOTSTRAP_SECRET }),
   });
   if (!res.ok) throw new Error('Failed to get auth token');
   const { token } = await res.json();
