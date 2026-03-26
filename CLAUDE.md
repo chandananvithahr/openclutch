@@ -21,47 +21,44 @@
 
 ## Current State (update this after every session)
 
-**Last updated:** 2026-03-25 | **Last commit:** `f4aec96` — 8-phase codebase cleanup (session 8 changes not yet committed)
+**Last updated:** 2026-03-26 | **Last commit:** `b3a3565` — Angel One MPIN fix + timeout
 
 ### What's Built ✅
 - Backend: Express server, all routes (chat, zerodha, angelone, gmail, calendar, sms, cas, journal, career, health, workflows, onboarding)
 - 3-tier memory system (sliding window + LLM summary + GPT facts)
 - 27 AI tools defined + executor routing
 - Workflow engine (DeerFlow2 pattern): emailSync, portfolioSync, healthSync, weeklyReview, smsIngestion
-- Broker adapters: Zerodha ✅, Angel One ✅, Upstox ✅, Fyers ✅, Dhan ✅, 5paisa ✅ — ALL 6 brokers done
+- Broker adapters: Zerodha ✅, Angel One ✅, Upstox ✅, Fyers ✅, Dhan ✅, 5paisa ✅, **Groww ⬜ (building)**
 - Mobile: ChatScreen, useChat hook, smsParser, healthConnect (Android), healthKit (iOS), unified health.js
-- Mobile onboarding: `OnboardingFlow.js` (10-screen adaptive Cleo-style) + `OnboardingCard.js` (reusable card with haptics/animation) ✅
+- Mobile onboarding: `OnboardingFlow.js` (10-screen adaptive Cleo-style) + `OnboardingCard.js` ✅
 - Supabase tables: messages, connected_apps, user_facts, sms_transactions, journal_entries, career_profiles, job_applications, user_profiles, notifications, health_data, memories (pgvector) ✅ — ALL with RLS enabled
 - **Railway deployment: backend is LIVE** — `humble-blessing-production.up.railway.app` ✅
-- Mobile `.env` set to Railway URL ✅
+- Railway now connected to GitHub — auto-deploys on every push ✅
+- JWT auth enforced on all routes ✅
 - File upload + AI analysis: `POST /api/files/analyze` — PDF, Excel, CSV → AI summary ✅
 - Google Drive integration: OAuth2 + file listing + AI analysis (`/api/drive/*`) ✅
 
-### What's NOT Built Yet ❌
-- ~~Security hardening~~ ALL 5 CRITICAL issues fixed: JWT auth ✅, helmet ✅, global rate limit ✅, OAuth CSRF state ✅, multer validation ✅
-- ~~Profile data wired into chat.js~~ ✅ Done — profile + facts both injected into system prompt
-- Android device test with Railway backend end-to-end
-- Remaining Railway env vars: broker API keys, Google OAuth keys, ALLOWED_ORIGINS
+### Broker Live Test Results (session 10 — 2026-03-26)
+| Broker | Status | Notes |
+|--------|--------|-------|
+| Zerodha | ✅ Working | Real portfolio data confirmed |
+| Fyers | ✅ Working | ₹3.12L, 25 holdings confirmed |
+| Angel One | ✅ Working | Connected, empty portfolio (no stocks in account) |
+| Upstox | ❌ Blocked | User's Upstox account is deactivated |
+| Dhan | ⬜ Not tested | Needs credentials |
+| 5paisa | ⬜ Not tested | Needs credentials |
+| Groww | ⬜ Building now | API Key + Secret available, route not yet built |
 
-### Uncommitted Changes Sitting in Repo (session 8)
-- `backend/src/server.js` — added Upstox/Fyers/Dhan/5paisa route imports
-- `backend/src/routes/upstox.js` — NEW (OAuth2 + upstox-js-sdk)
-- `backend/src/routes/fyers.js` — NEW (OAuth2 + fyers-api-v3)
-- `backend/src/routes/dhan.js` — NEW (token auth + dhanhq)
-- `backend/src/routes/fivepaisa.js` — NEW (TOTP + 5paisa-ts-sdk)
-- `backend/src/brokers/index.js` — 4 new adapters added
-- `backend/package.json` — engines field + new broker deps
-- `mobile/components/OnboardingCard.js` — NEW
-- `mobile/screens/OnboardingFlow.js` — NEW
-- `mobile/App.js` — OnboardingFlow import, spinner color
-- `mobile/.env` — Railway URL
-- `mobile/android/gradle.properties` — minSdkVersion 24→26
+### What's NOT Built Yet ❌
+- Groww broker integration (`routes/groww.js`) — building now
+- Android device test with Railway backend end-to-end
+- Dhan + 5paisa live testing
 
 ### Next Up (in order)
-1. Commit all changes (session 8 + security fixes + profile injection)
-2. Add `JWT_SECRET` to Railway env vars (same value as local .env)
-3. Full Android device test with Railway backend end-to-end
-4. Add remaining Railway env vars: broker API keys, Google OAuth, ALLOWED_ORIGINS
+1. Build Groww broker integration
+2. Test Dhan + 5paisa
+3. Android device end-to-end test
+4. Add ALLOWED_ORIGINS to Railway
 
 ## gstack
 
@@ -135,6 +132,7 @@ D:\OPENCLAW CHANDAN\
 │   │   │   ├── fyers.js           ← ✅ Fyers OAuth2 + fyers-api-v3 + token storage
 │   │   │   ├── dhan.js            ← ✅ Dhan token auth + dhanhq + holdings
 │   │   │   ├── fivepaisa.js       ← ✅ 5paisa TOTP + 5paisa-ts-sdk + token storage
+│   │   │   ├── groww.js           ← ⬜ Groww Trade API — API Key + Secret auth + holdings
 │   │   │   ├── gmail.js           ← Google OAuth2, fetchEmails(), searchEmails()
 │   │   │   ├── calendar.js        ← Google Calendar OAuth2, schedule, free slots (Kaal agent)
 │   │   │   ├── cas.js             ← POST /api/cas/upload — CASParser MF integration
@@ -246,15 +244,16 @@ User types message
 4. Mobile: add broker logo/connect button in ChatScreen status bar
 > broker adapter auto-merges new broker into portfolio — no executor.js changes needed
 
-## Broker Integration Plan (6 Brokers → ~90% coverage)
+## Broker Integration Plan (7 Brokers → ~72% coverage)
 | # | Broker | API | Auth | Cost | Status | Priority |
 |---|--------|-----|------|------|--------|----------|
-| 1 | **Zerodha** | KiteConnect | OAuth2 + request_token | Rs 2000/mo | ✅ Built | — |
-| 2 | **Angel One** | SmartAPI | Client ID + TOTP | Free | ✅ Built | — |
-| 3 | **Upstox** | Upstox API v2 | OAuth2 | Free | ✅ Built | — |
-| 4 | **Fyers** | Fyers API v3 | OAuth2 | Free | ✅ Built | — |
-| 5 | **Dhan** | DhanHQ API | Access Token | Free | ✅ Built | — |
-| 6 | **5paisa** | 5paisa API | OAuth2 + TOTP | Free | ✅ Built | — |
+| 1 | **Zerodha** | KiteConnect | OAuth2 + request_token | Rs 2000/mo | ✅ Built + Tested | — |
+| 2 | **Angel One** | SmartAPI | Client ID + MPIN + TOTP | Free | ✅ Built + Tested | — |
+| 3 | **Upstox** | Upstox API v2 | OAuth2 | Free | ✅ Built | Account deactivated |
+| 4 | **Fyers** | Fyers API v3 | OAuth2 | Free | ✅ Built + Tested | — |
+| 5 | **Dhan** | DhanHQ API | Access Token | Free | ✅ Built | Not tested yet |
+| 6 | **5paisa** | 5paisa API | OAuth2 + TOTP | Free | ✅ Built | Not tested yet |
+| 7 | **Groww** | Groww Trade API | API Key + Secret | Rs 499/mo | ⬜ Building | — |
 
 ### API Docs & SDKs
 | Broker | API Docs | npm/SDK | Auth Flow |
@@ -263,12 +262,12 @@ User types message
 | Fyers | myapi.fyers.in/docsv3 | `fyers-api-v3` | OAuth2 → access_token → REST/WebSocket |
 | Dhan | dhanhq.co/docs | `dhanhq` | API key + access_token from login |
 | 5paisa | developer.5paisa.com | `5paisa-js` | OAuth2 + TOTP → request_token → REST |
+| Groww | groww.in/trade-api/docs | REST only (no Node SDK) | API Key + Secret → Bearer token → REST |
 
-### Integration Order
-1. **Upstox** (largest free user base, OAuth2 same pattern as Zerodha)
-2. **Fyers** (clean v3 API, OAuth2)
-3. **Dhan** (modern REST, simple token auth)
-4. **5paisa** (TOTP flow similar to Angel One)
+### Angel One Auth Notes
+- `generateSession(clientId, mpin, totp)` — password field = MPIN (4 digits), NOT login password
+- TOTP must be from SmartAPI-specific authenticator entry (not regular Angel One login)
+- Phone time must be synced (TOTP is time-sensitive ±30s)
 
 ### Per-Broker File Pattern
 ```
@@ -501,7 +500,7 @@ Full architecture doc: `docs/ARCHITECTURE.md`
 - Do NOT store raw financial data in DB — fetch live every time
 - Do NOT store raw SMS body — only parsed amount + merchant + date
 - Do NOT hardcode API keys — always use `.env`
-- Do NOT add Groww — no public API available
+- Groww now has a public API (groww.in/trade-api, Rs 499/mo) — integration is being built in `routes/groww.js`
 - Do NOT integrate brokers outside the 6 planned (Zerodha, Angel One, Upstox, Fyers, Dhan, 5paisa) without discussion
 - Do NOT edit `android/` folder manually — it's generated by `expo prebuild`
 - Do NOT call Supabase directly in routes — use `repositories/index.js`
