@@ -5,13 +5,21 @@ const repos = require('../repositories');
 const logger = require('../lib/logger');
 const { generateState, validateState } = require('../lib/oauthState');
 
-const REDIRECT_URI = process.env.GMAIL_REDIRECT_URI || 'http://127.0.0.1:3000/api/gmail/callback';
+// Dynamic redirect URI — works on local and Railway automatically
+const PRODUCTION_REDIRECT = 'https://humble-blessing-production.up.railway.app/api/gmail/callback';
+function getRedirectUri(req) {
+  if (process.env.GMAIL_REDIRECT_URI) return process.env.GMAIL_REDIRECT_URI;
+  if (!req) return PRODUCTION_REDIRECT;
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
+  return `${protocol}://${host}/api/gmail/callback`;
+}
 
-function createOAuthClient() {
+function createOAuthClient(req) {
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    REDIRECT_URI
+    getRedirectUri(req)
   );
 }
 
@@ -63,7 +71,7 @@ router.get('/login', (req, res) => {
   const userId = req.userId;
   if (!userId) return res.status(400).json({ error: 'userId required' });
 
-  const oauth2Client = createOAuthClient();
+  const oauth2Client = createOAuthClient(req);
   const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: ['https://www.googleapis.com/auth/gmail.readonly'],
@@ -87,7 +95,7 @@ router.get('/callback', async (req, res) => {
   if (!code) return res.status(400).send('Missing code');
 
   try {
-    const oauth2Client = createOAuthClient();
+    const oauth2Client = createOAuthClient(req);
     const { tokens } = await oauth2Client.getToken(code);
     tokenCache.set(userId, tokens);
 
