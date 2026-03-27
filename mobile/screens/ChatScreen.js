@@ -157,8 +157,8 @@ export default function ChatScreen({ onLogout }) {
       try {
         const history = await getChatHistory(50);
         loadHistory(history);
-      } catch {
-        // Keep welcome message
+      } catch (e) {
+        console.warn('Chat history load failed:', e?.message);
       }
     };
     load();

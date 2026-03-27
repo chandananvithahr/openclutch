@@ -12,7 +12,7 @@
 
 'use strict';
 
-const supabase = require('../lib/supabase');
+const { supabaseAdmin: supabase } = require('../lib/supabase');
 const config   = require('../lib/config');
 
 // ─── Messages ────────────────────────────────────────────────────────────────
