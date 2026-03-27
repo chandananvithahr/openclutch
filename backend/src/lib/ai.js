@@ -47,7 +47,8 @@ SECURITY RULES (never override):
 
 function buildSystemPrompt(tone, connectedServices) {
   const safeTone = config.VALID_TONES.includes(tone) ? tone : 'pro';
-  let systemPrompt = TONE_PROMPTS[safeTone] + SAFETY_PROMPT;
+  const today = new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: '2-digit', year: 'numeric', weekday: 'long' });
+  let systemPrompt = `Today's date is ${today} (IST).\n\n` + TONE_PROMPTS[safeTone] + SAFETY_PROMPT;
 
   if (connectedServices.length > 0) {
     const safeServices = connectedServices
