@@ -196,6 +196,14 @@ router.get('/status', async (req, res) => {
   res.json({ connected: !!token });
 });
 
+// POST /api/zerodha/disconnect — clear token from DB + cache
+router.post('/disconnect', async (req, res) => {
+  const userId = req.userId;
+  clearTokenCache(userId);
+  await repos.connectedApps.deleteToken(userId, 'zerodha');
+  res.json({ disconnected: true });
+});
+
 // Fetch holdings for a specific user — used by brokers/index.js adapter
 async function fetchHoldingsForUser(userId) {
   const token = await getAccessToken(userId);

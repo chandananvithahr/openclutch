@@ -174,6 +174,16 @@ const connectedApps = {
     return { error };
   },
 
+  // Delete token for a service (disconnect)
+  async deleteToken(userId, appName) {
+    const { error } = await supabase
+      .from('connected_apps')
+      .delete()
+      .eq('user_id', userId)
+      .eq('app_name', appName);
+    return { error };
+  },
+
   // Store arbitrary JSON metadata (e.g., portfolio snapshot, sync cursors)
   // Uses access_token column as a JSON string — keep payloads small (<4KB).
   async saveMeta(userId, key, value) {
