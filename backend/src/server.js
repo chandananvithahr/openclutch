@@ -73,7 +73,7 @@ app.get('/health', async (req, res) => {
   res.json({
     status:  error ? 'degraded' : 'ok',
     app:     'Clutch Backend',
-    version: 'v2.1-mar27',
+    version: 'v2.2-mar27',
     db:      error ? `error: ${error.message}` : 'connected',
   });
 });
