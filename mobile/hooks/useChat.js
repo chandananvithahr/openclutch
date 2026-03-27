@@ -3,7 +3,7 @@
 // Frontend: myChat StreamProcessor pattern (chunk → delta → done events)
 // Falls back to non-streaming /api/chat if stream fails
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import BACKEND_URL from '../services/config';
 import { getToken } from '../services/api';
 
@@ -25,6 +25,18 @@ export function useChat(tone) {
   const [messages, setMessages] = useState([WELCOME_MESSAGE]);
   const [isTyping, setIsTyping] = useState(false);
   const [conversations, setConversations] = useState([]);
+  const abortRef = useRef(null);
+
+  const stop = useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    setIsTyping(false);
+    setMessages(prev => prev.map(m =>
+      m.streaming ? { ...m, streaming: false } : m
+    ));
+  }, []);
 
   const send = useCallback(async (text) => {
     if (!text.trim() || isTyping) return false;
@@ -47,6 +59,9 @@ export function useChat(tone) {
     setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '', streaming: true }]);
 
     try {
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       const token = await getToken();
       const authHeaders = {
         'Content-Type': 'application/json',
@@ -57,6 +72,7 @@ export function useChat(tone) {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({ messages: apiMessages, tone }),
+        signal: controller.signal,
         // myChat reactNative textStreaming flag — enables ReadableStream on RN
         reactNative: { textStreaming: true },
       });
@@ -105,6 +121,7 @@ export function useChat(tone) {
 
       return true;
     } catch (streamErr) {
+      if (streamErr?.name === 'AbortError') return false;
       // Fallback to non-streaming /api/chat
       try {
         const fallbackToken = await getToken();
@@ -154,5 +171,5 @@ export function useChat(tone) {
     }]);
   }, []);
 
-  return { messages, isTyping, conversations, send, reset, loadHistory };
+  return { messages, isTyping, conversations, send, stop, reset, loadHistory };
 }

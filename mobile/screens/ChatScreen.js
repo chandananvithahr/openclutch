@@ -45,7 +45,7 @@ export default function ChatScreen({ onLogout }) {
   const [tone, setTone] = useState('pro');
 
   // Chat logic — myChat useChat hook pattern
-  const { messages, isTyping, conversations, send, reset, loadHistory } = useChat(tone);
+  const { messages, isTyping, conversations, send, stop, reset, loadHistory } = useChat(tone);
 
   // Input state
   const [input, setInput] = useState('');
@@ -309,6 +309,35 @@ export default function ChatScreen({ onLogout }) {
 
   const selectedTone = TONE_OPTIONS.find(t => t.key === tone);
 
+  const renderItem = useCallback(({ item }) => {
+    const prompts = item.role === 'assistant' && item.id !== 'welcome'
+      ? detectConnectionPrompts(item.content, {
+          zerodha: zerodhaConnected, angelone: angelOneConnected,
+          upstox: upstoxConnected, fyers: fyersConnected, gmail: gmailConnected,
+        })
+      : [];
+    return (
+      <View>
+        <MessageBubble message={item} />
+        {prompts.map(svc => (
+          <ConnectionCard
+            key={svc}
+            service={svc}
+            onConnect={() => {
+              if (svc === 'zerodha') handleZerodhaConnect();
+              else if (svc === 'angelone') setShowAngelOneModal(true);
+              else if (svc === 'upstox') handleUpstoxConnect();
+              else if (svc === 'fyers') handleFyersConnect();
+              else if (svc === 'gmail') handleGmailConnect();
+              else if (svc === 'broker') handleZerodhaConnect();
+            }}
+          />
+        ))}
+      </View>
+    );
+  }, [zerodhaConnected, angelOneConnected, upstoxConnected, fyersConnected, gmailConnected,
+      handleZerodhaConnect, handleUpstoxConnect, handleFyersConnect, handleGmailConnect]);
+
   return (
     // KeyboardAvoidingView — Gifted Chat fix for input bar sticking to keyboard
     <KeyboardAvoidingView
@@ -368,33 +397,7 @@ export default function ChatScreen({ onLogout }) {
           ref={flatListRef}
           data={messages}
           keyExtractor={item => item.id}
-          renderItem={({ item }) => {
-            const prompts = item.role === 'assistant' && item.id !== 'welcome'
-              ? detectConnectionPrompts(item.content, {
-                  zerodha: zerodhaConnected, angelone: angelOneConnected,
-                  upstox: upstoxConnected, fyers: fyersConnected, gmail: gmailConnected,
-                })
-              : [];
-            return (
-              <View>
-                <MessageBubble message={item} />
-                {prompts.map(svc => (
-                  <ConnectionCard
-                    key={svc}
-                    service={svc}
-                    onConnect={() => {
-                      if (svc === 'zerodha') handleZerodhaConnect();
-                      else if (svc === 'angelone') setShowAngelOneModal(true);
-                      else if (svc === 'upstox') handleUpstoxConnect();
-                      else if (svc === 'fyers') handleFyersConnect();
-                      else if (svc === 'gmail') handleGmailConnect();
-                      else if (svc === 'broker') handleZerodhaConnect(); // default to Zerodha
-                    }}
-                  />
-                ))}
-              </View>
-            );
-          }}
+          renderItem={renderItem}
           ListFooterComponent={isTyping ? <TypingIndicator /> : null}
           contentContainerStyle={styles.messageList}
           style={styles.flatList}
@@ -434,20 +437,25 @@ export default function ChatScreen({ onLogout }) {
             editable={!isTyping}
           />
 
-          {/* Animated send button */}
-          <Animated.View style={[styles.sendBtnWrap, { opacity: sendOpacity }]}>
-            <TouchableOpacity
-              style={[styles.sendBtn, isTyping && styles.sendBtnDisabled]}
-              onPress={handleSend}
-              disabled={isTyping || !input.trim()}
-            >
-              {/* Arrow up — two lines forming chevron */}
-              <View style={styles.sendArrow}>
-                <View style={styles.sendArrowLeft} />
-                <View style={styles.sendArrowRight} />
-              </View>
+          {/* Stop button while typing, send button otherwise */}
+          {isTyping ? (
+            <TouchableOpacity style={styles.stopBtn} onPress={stop}>
+              <View style={styles.stopIcon} />
             </TouchableOpacity>
-          </Animated.View>
+          ) : (
+            <Animated.View style={[styles.sendBtnWrap, { opacity: sendOpacity }]}>
+              <TouchableOpacity
+                style={styles.sendBtn}
+                onPress={handleSend}
+                disabled={!input.trim()}
+              >
+                <View style={styles.sendArrow}>
+                  <View style={styles.sendArrowLeft} />
+                  <View style={styles.sendArrowRight} />
+                </View>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
         </View>
       </View>
 
@@ -702,6 +710,17 @@ const styles = StyleSheet.create({
   input: {
     flex: 1, fontSize: typography.md, color: colors.text,
     paddingVertical: 10, lineHeight: typography.normal,
+  },
+  stopBtn: {
+    width: 34, height: 34, borderRadius: radius.full,
+    backgroundColor: colors.surface,
+    justifyContent: 'center', alignItems: 'center',
+    marginLeft: spacing.sm, marginBottom: 4,
+    borderWidth: 1.5, borderColor: colors.border,
+  },
+  stopIcon: {
+    width: 12, height: 12, borderRadius: 2,
+    backgroundColor: colors.text,
   },
   sendBtnWrap: { marginLeft: spacing.sm, marginBottom: 4 },
   sendBtn: {

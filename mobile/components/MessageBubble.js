@@ -1,11 +1,17 @@
-import React, { memo, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import React, { memo, useRef, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, Animated, TouchableOpacity, Clipboard, ToastAndroid } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import PortfolioChart from './PortfolioChart';
 import { colors, spacing, radius, typography } from '../styles/theme';
 
 function MessageBubble({ message }) {
   const isUser = message.role === 'user';
+
+  const handleLongPress = useCallback(() => {
+    if (!message.content) return;
+    Clipboard.setString(message.content);
+    ToastAndroid.show('Copied', ToastAndroid.SHORT);
+  }, [message.content]);
 
   // Subtle slide-in animation (Kailash: fast, 150ms)
   const slideAnim = useRef(new Animated.Value(isUser ? 20 : -8)).current;
@@ -34,9 +40,11 @@ function MessageBubble({ message }) {
           { opacity: fadeAnim, transform: [{ translateX: slideAnim }] },
         ]}
       >
-        <View style={styles.userBubble}>
-          <Text style={styles.userText}>{message.content}</Text>
-        </View>
+        <TouchableOpacity onLongPress={handleLongPress} activeOpacity={1}>
+          <View style={styles.userBubble}>
+            <Text style={styles.userText}>{message.content}</Text>
+          </View>
+        </TouchableOpacity>
       </Animated.View>
     );
   }
@@ -60,14 +68,14 @@ function MessageBubble({ message }) {
       <View style={styles.iconWrap}>
         <Text style={styles.iconText}>C</Text>
       </View>
-      <View style={styles.assistantContent}>
+      <TouchableOpacity style={styles.assistantContent} onLongPress={handleLongPress} activeOpacity={1}>
         {message.content ? (
           <Markdown style={markdownStyles}>{message.content}</Markdown>
         ) : null}
         {message.chartData ? (
           <PortfolioChart data={message.chartData} />
         ) : null}
-      </View>
+      </TouchableOpacity>
     </Animated.View>
   );
 }
