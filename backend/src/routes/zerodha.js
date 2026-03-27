@@ -54,7 +54,7 @@ router.get('/login', async (req, res) => {
 router.get('/callback', async (req, res) => {
   const { request_token, state } = req.query;
 
-  const { valid, userId } = validateState(state);
+  const { valid, userId } = await validateState(state);
   if (!valid || !userId) {
     return res.status(403).send('Invalid or expired OAuth state. Please try connecting again.');
   }

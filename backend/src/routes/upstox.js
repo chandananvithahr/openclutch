@@ -86,7 +86,7 @@ router.get('/login', async (req, res) => {
 // GET /api/upstox/callback?code=XXXX
 router.get('/callback', async (req, res) => {
   const { code, state } = req.query;
-  const { valid, userId } = validateState(state);
+  const { valid, userId } = await validateState(state);
   if (!valid || !userId) {
     return res.status(403).send('Invalid or expired OAuth state. Please try connecting again.');
   }

@@ -82,7 +82,7 @@ router.get('/callback', async (req, res) => {
   const { auth_code, state } = req.query;
 
   // Validate OAuth state — NEVER fall back to query params (CSRF protection)
-  const { valid, userId } = validateState(state);
+  const { valid, userId } = await validateState(state);
   if (!valid || !userId) {
     logger.warn('Fyers callback — invalid or expired OAuth state', { state });
     return res.status(403).send('Invalid or expired OAuth state. Please try connecting again from the app.');

@@ -29,7 +29,12 @@ async function generateState(userId) {
 }
 
 async function validateState(state) {
-  if (!state) return { valid: false, userId: null };
+  if (!state) {
+    logger.warn('OAuth validateState: no state param received');
+    return { valid: false, userId: null };
+  }
+
+  logger.info('OAuth validateState: looking up state', { state: state.slice(0, 10) + '...' });
 
   const { data, error } = await db
     .from('oauth_states')
@@ -37,15 +42,25 @@ async function validateState(state) {
     .eq('state', state)
     .single();
 
-  if (error || !data) return { valid: false, userId: null };
+  if (error || !data) {
+    logger.error('OAuth validateState: state not found in DB', {
+      state: state.slice(0, 10) + '...',
+      error: error?.message || 'no data',
+    });
+    return { valid: false, userId: null };
+  }
 
   // Delete after reading (single-use)
   await db.from('oauth_states').delete().eq('state', state);
 
   // Check expiry
   const age = Date.now() - new Date(data.created_at).getTime();
-  if (age > STATE_TTL_MS) return { valid: false, userId: null };
+  if (age > STATE_TTL_MS) {
+    logger.warn('OAuth validateState: state expired', { age_ms: age });
+    return { valid: false, userId: null };
+  }
 
+  logger.info('OAuth validateState: success', { userId: data.user_id });
   return { valid: true, userId: data.user_id };
 }
 
