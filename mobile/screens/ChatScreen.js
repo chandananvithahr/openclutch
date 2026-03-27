@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Image,
   FlatList, StyleSheet, StatusBar, Modal, Alert,
@@ -72,17 +72,8 @@ export default function ChatScreen({ onLogout }) {
   const handleScroll = useCallback(({ nativeEvent }) => {
     const { contentOffset, contentSize, layoutMeasurement } = nativeEvent;
     const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
-    const atBottom = distanceFromBottom < SCROLL_BOTTOM_THRESHOLD;
-    if (atBottom !== isAtBottom.current) {
-      isAtBottom.current = atBottom;
-      setShowScrollBtn(!atBottom);
-      Animated.timing(scrollBtnOpacity, {
-        toValue: atBottom ? 0 : 1,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [scrollBtnOpacity]);
+    isAtBottom.current = distanceFromBottom < SCROLL_BOTTOM_THRESHOLD;
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     // 10ms delay ensures list renders before scroll — React-Native-AI-Assistant-App pattern
@@ -310,24 +301,21 @@ export default function ChatScreen({ onLogout }) {
       uri: a.uri, name: a.name, isImage: a.isImage,
     }));
 
-    // Upload files to backend, collect AI analysis results
-    const analysisResults = [];
-    const token = await getToken();
+    // Send the user message immediately with previews (no blocking upload)
+    const userText = text || `Analyze ${currentAttachments.map(a => a.name).join(', ')}`;
+    send(userText, previewAttachments);
 
+    // Upload files in background — results appear as follow-up
+    const token = await getToken();
     for (const att of currentAttachments) {
       try {
         const formData = new FormData();
         formData.append('file', { uri: att.uri, name: att.name, type: att.type });
         if (text) formData.append('question', text);
 
-        let endpoint;
-        if (att.isImage) {
-          endpoint = '/api/files/analyze-image';
-        } else if (att.name?.toLowerCase().includes('cas') && att.name?.toLowerCase().endsWith('.pdf')) {
-          endpoint = '/api/cas/upload';
-        } else {
-          endpoint = '/api/files/analyze';
-        }
+        const endpoint = att.isImage ? '/api/files/analyze-image'
+          : att.name?.toLowerCase().includes('cas') && att.name?.toLowerCase().endsWith('.pdf')
+            ? '/api/cas/upload' : '/api/files/analyze';
 
         const res = await fetch(`${BACKEND_URL}${endpoint}`, {
           method: 'POST',
@@ -335,20 +323,11 @@ export default function ChatScreen({ onLogout }) {
           body: formData,
         });
         const data = await res.json();
-        if (data.reply) analysisResults.push(data.reply);
         if (data.error) Alert.alert('Upload failed', data.error);
       } catch (e) {
         Alert.alert('Upload error', e?.message || 'Failed to upload');
       }
     }
-
-    // Send with analysis context so AI has the file content
-    const contextParts = [];
-    if (text) contextParts.push(text);
-    if (analysisResults.length > 0) {
-      contextParts.push(`[File analysis results]\n${analysisResults.join('\n\n')}`);
-    }
-    await send(contextParts.join('\n\n') || 'Analyze my attachments', previewAttachments);
   }, [input, isTyping, send, attachments]);
 
   const handleNewChat = useCallback(() => {
@@ -417,6 +396,16 @@ export default function ChatScreen({ onLogout }) {
     });
     if (!result.canceled) result.assets.forEach(addAttachment);
   }, [addAttachment]);
+
+  // Memoize filtered data — avoid new array on every render
+  const filteredMessages = useMemo(
+    () => messages.filter(m => !(m.streaming && !m.content)),
+    [messages]
+  );
+  const showTypingFooter = useMemo(
+    () => messages[messages.length - 1]?.streaming && !messages[messages.length - 1]?.content,
+    [messages]
+  );
 
   const selectedTone = TONE_OPTIONS.find(t => t.key === tone);
 
@@ -506,17 +495,19 @@ export default function ChatScreen({ onLogout }) {
       <View style={styles.listWrapper}>
         <FlatList
           ref={flatListRef}
-          data={messages.filter(m => !(m.streaming && !m.content))}
+          data={filteredMessages}
           keyExtractor={item => item.id}
           renderItem={renderItem}
-          ListFooterComponent={messages[messages.length - 1]?.streaming && !messages[messages.length - 1]?.content ? <TypingIndicator /> : null}
+          ListFooterComponent={showTypingFooter ? <TypingIndicator /> : null}
           contentContainerStyle={styles.messageList}
           style={styles.flatList}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
-          scrollEventThrottle={100}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          scrollEventThrottle={400}
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          removeClippedSubviews={true}
         />
 
       </View>
