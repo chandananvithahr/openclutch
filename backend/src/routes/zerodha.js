@@ -145,6 +145,25 @@ router.get('/portfolio', async (req, res) => {
       };
     });
 
+    // Include intraday/delivery positions (net qty != 0)
+    const activePositions = (positions.net || []).filter(p => p.quantity !== 0);
+    let positionsPnl = 0;
+
+    const formattedPositions = activePositions.map(p => {
+      const pnl = p.pnl || ((p.last_price - p.average_price) * p.quantity);
+      positionsPnl += pnl;
+      return {
+        symbol: p.tradingsymbol,
+        name: p.tradingsymbol,
+        qty: p.quantity,
+        buy_price: p.average_price,
+        current_price: p.last_price,
+        pnl: parseFloat(pnl.toFixed(2)),
+        type: p.product,  // MIS (intraday) / CNC (delivery) / NRML
+        broker: 'Zerodha',
+      };
+    });
+
     const totalPnl = totalValue - totalInvested;
 
     res.json({
@@ -153,8 +172,11 @@ router.get('/portfolio', async (req, res) => {
       total_pnl: parseFloat(totalPnl.toFixed(2)),
       total_pnl_percent: totalInvested > 0 ? parseFloat(((totalPnl / totalInvested) * 100).toFixed(2)) : 0,
       total_day_change: parseFloat(totalDayChange.toFixed(2)),
+      positions_pnl: parseFloat(positionsPnl.toFixed(2)),
       holdings_count: formattedHoldings.length,
+      positions_count: formattedPositions.length,
       holdings: formattedHoldings,
+      positions: formattedPositions,
       brokers_connected: ['Zerodha'],
     });
   } catch (err) {
