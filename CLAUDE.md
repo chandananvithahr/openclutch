@@ -21,7 +21,7 @@
 
 ## Current State (update this after every session)
 
-**Last updated:** 2026-03-27 | **Last commit:** `b3a3565` — Angel One MPIN fix + timeout
+**Last updated:** 2026-03-27 | **Last commit:** `de09fb5` — real auth flow on mobile + full UI overhaul
 
 ### What's Built ✅
 - Backend: Express server, all routes (chat, zerodha, angelone, upstox, fyers, gmail, calendar, sms, cas, journal, career, health, workflows, onboarding, files, drive)
@@ -31,8 +31,13 @@
 - Broker adapters: Zerodha ✅, Angel One ✅, Upstox ✅, Fyers ✅ (4 OAuth-scalable brokers)
 - **Removed:** Groww, Dhan, 5paisa (non-scalable per-user API key model — not suitable for millions of users)
 - **Removed:** WhatsApp integration (dropped from scope)
-- Mobile: ChatScreen, useChat hook, smsParser, healthConnect (Android), healthKit (iOS), unified health.js
-- Mobile onboarding: `OnboardingFlow.js` (10-screen adaptive Cleo-style) + `OnboardingCard.js` ✅
+- Cross-domain pattern detection engine + "Can I Afford X?" purchase advisor ✅
+- Sunday Briefing + stealth insights workflow ✅
+- Onboarding simplified to 2 steps + landing page ✅
+- 1000-user production hardening (auth, validation, rate limiter, query optimization) ✅
+- Mobile: real auth (LoginScreen signup/login), animated splash screen, ChatScreen, Sidebar, useChat hook, smsParser, healthConnect (Android), healthKit (iOS), unified health.js
+- Mobile: unified cocoa theme across all components (#2D1B14 bg, #FFE36D accent) ✅
+- Mobile onboarding: `OnboardingFlow.js` (2-step simplified Cleo-style) + `OnboardingCard.js` ✅
 - Supabase tables: messages, connected_apps, user_facts, sms_transactions, journal_entries, career_profiles, job_applications, user_profiles, notifications, health_data, memories (pgvector) ✅ — ALL with RLS enabled
 - **Railway deployment: backend is LIVE** — `humble-blessing-production.up.railway.app` ✅
 - Railway now connected to GitHub — auto-deploys on every push ✅
@@ -48,20 +53,23 @@
 | Angel One | ✅ Working | Connected, empty portfolio (no stocks in account) |
 | Upstox | ❌ Blocked | User's Upstox account is deactivated |
 
-### Security Status ✅ (all fixed in Session 6)
-All 10 findings from CSO audit resolved — see `docs/SECURITY_CRITICALS.md` for details.
+### Security Status ✅ (all fixed — Session 6 + Session 11)
+All 10 findings from CSO audit resolved — see `docs/SECURITY_CRITICALS.md`.
 Next CSO audit recommended after major feature additions.
 
 ### What's NOT Built Yet ❌
-- Android device test with Railway backend end-to-end
+- Android device E2E test with Railway backend (login → chat → AI response on real phone)
+- Markdown rendering in MessageBubble (AI responses render as plain text)
+- Notification bell UI (backend fires notifications, mobile doesn't display them)
 - Add ALLOWED_ORIGINS to Railway env
+- Play Store internal testing track
 - Account Aggregator (AA) integration for scale (Finvu/OneMoney — future)
 
 ### Next Up (in order)
-1. Android device end-to-end test (message → AI response on real phone)
-2. Add ALLOWED_ORIGINS to Railway
-3. Run pending SQL in Supabase (if not yet done): `notifications.sql`, `health_data.sql`, `journal_entries.sql`, `career_profiles.sql`, `indexes_and_rls.sql`
-4. Continue mobile UI work (LoginScreen, Sidebar, ConnectionCard uncommitted changes)
+1. Android device E2E test — build APK, test full auth + chat flow on real device
+2. Markdown rendering in chat (`react-native-markdown-display`)
+3. Notification bell in ChatScreen header
+4. Add ALLOWED_ORIGINS to Railway
 
 ## gstack
 
