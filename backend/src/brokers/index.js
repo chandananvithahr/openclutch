@@ -45,7 +45,8 @@ const adapters = [
     async getHoldings(userId) {
       const z = require('../routes/zerodha');
       const raw = await z.fetchHoldings(userId);
-      return raw.map(h => normalizeHolding({
+      // raw is now { equity: [...], mf: [...] }
+      const equity = (raw.equity || raw).map(h => normalizeHolding({
         symbol:       h.symbol,
         name:         h.name,
         qty:          h.qty,
@@ -54,6 +55,17 @@ const adapters = [
         broker:       'Zerodha',
         settling:     h.settling,
       }));
+      const mf = (raw.mf || []).map(m => normalizeHolding({
+        symbol:       m.symbol,
+        name:         m.name,
+        qty:          m.qty,
+        currentPrice: m.current_price,
+        avgPrice:     m.buy_price,
+        broker:       'Zerodha',
+      }));
+      // Tag MF holdings
+      mf.forEach(m => { m.type = 'mutual_fund'; });
+      return [...equity, ...mf];
     },
   },
 

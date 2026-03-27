@@ -109,14 +109,19 @@ router.get('/portfolio', async (req, res) => {
 
   try {
     const kite = createKite(token);
-    const [holdings, positions] = await Promise.all([
+    const [holdings, positions, mfHoldings] = await Promise.all([
       kite.getHoldings(),
       kite.getPositions(),
+      kite.getMFHoldings().catch(err => {
+        logger.warn('Zerodha MF holdings fetch failed', { err: err.message });
+        return [];
+      }),
     ]);
 
     logger.info('Zerodha raw holdings', {
       userId,
-      total: holdings.length,
+      equity: holdings.length,
+      mf: mfHoldings.length,
       symbols: holdings.map(h => `${h.tradingsymbol}:${h.quantity}`).join(', '),
     });
 
@@ -171,20 +176,50 @@ router.get('/portfolio', async (req, res) => {
       };
     });
 
-    const totalPnl = totalValue - totalInvested;
+    // Format MF holdings
+    let mfTotalValue = 0;
+    let mfTotalInvested = 0;
+    const formattedMF = (mfHoldings || []).map(mf => {
+      const cv = mf.last_price * mf.quantity;
+      const iv = mf.average_price * mf.quantity;
+      const pnl = mf.pnl != null ? mf.pnl : (cv - iv);
+      mfTotalValue += cv;
+      mfTotalInvested += iv;
+      return {
+        fund_name: mf.tradingsymbol || mf.fund,
+        folio: mf.folio,
+        units: mf.quantity,
+        avg_nav: parseFloat((mf.average_price || 0).toFixed(2)),
+        current_nav: parseFloat((mf.last_price || 0).toFixed(2)),
+        current_value: parseFloat(cv.toFixed(2)),
+        invested: parseFloat(iv.toFixed(2)),
+        pnl: parseFloat(pnl.toFixed(2)),
+        pnl_percent: iv > 0 ? parseFloat(((pnl / iv) * 100).toFixed(2)) : 0,
+        type: 'mutual_fund',
+        broker: 'Zerodha',
+      };
+    });
+
+    const grandTotalValue = totalValue + mfTotalValue;
+    const grandTotalInvested = totalInvested + mfTotalInvested;
+    const totalPnl = grandTotalValue - grandTotalInvested;
 
     res.json({
-      total_value: parseFloat(totalValue.toFixed(2)),
-      total_invested: parseFloat(totalInvested.toFixed(2)),
+      total_value: parseFloat(grandTotalValue.toFixed(2)),
+      total_invested: parseFloat(grandTotalInvested.toFixed(2)),
       total_pnl: parseFloat(totalPnl.toFixed(2)),
-      total_pnl_percent: totalInvested > 0 ? parseFloat(((totalPnl / totalInvested) * 100).toFixed(2)) : 0,
+      total_pnl_percent: grandTotalInvested > 0 ? parseFloat(((totalPnl / grandTotalInvested) * 100).toFixed(2)) : 0,
       total_day_change: parseFloat(totalDayChange.toFixed(2)),
+      equity_value: parseFloat(totalValue.toFixed(2)),
+      mf_value: parseFloat(mfTotalValue.toFixed(2)),
       positions_pnl: parseFloat(positionsPnl.toFixed(2)),
       holdings_count: formattedHoldings.filter(h => !h.settling).length,
       settling_count: formattedHoldings.filter(h => h.settling).length,
       total_stocks: formattedHoldings.length,
+      mf_count: formattedMF.length,
       positions_count: formattedPositions.length,
       holdings: formattedHoldings,
+      mutual_funds: formattedMF,
       positions: formattedPositions,
       brokers_connected: ['Zerodha'],
     });
@@ -221,10 +256,13 @@ router.post('/disconnect', async (req, res) => {
 // Fetch holdings for a specific user — used by brokers/index.js adapter
 async function fetchHoldingsForUser(userId) {
   const token = await getAccessToken(userId);
-  if (!token) return [];
+  if (!token) return { equity: [], mf: [] };
   const kite = createKite(token);
-  const raw = await kite.getHoldings();
-  return raw.map(h => ({
+  const [raw, mfRaw] = await Promise.all([
+    kite.getHoldings(),
+    kite.getMFHoldings().catch(() => []),
+  ]);
+  const equity = raw.map(h => ({
     symbol: h.tradingsymbol,
     name: h.tradingsymbol,
     qty: h.quantity,
@@ -234,6 +272,17 @@ async function fetchHoldingsForUser(userId) {
     broker: 'Zerodha',
     ...(h.quantity === 0 && { settling: true }),
   }));
+  const mf = (mfRaw || []).map(m => ({
+    symbol: m.tradingsymbol || m.fund,
+    name: m.tradingsymbol || m.fund,
+    qty: m.quantity,
+    buy_price: m.average_price,
+    current_price: m.last_price,
+    pnl: m.pnl != null ? m.pnl : ((m.last_price - m.average_price) * m.quantity),
+    broker: 'Zerodha',
+    type: 'mutual_fund',
+  }));
+  return { equity, mf };
 }
 
 module.exports = router;
