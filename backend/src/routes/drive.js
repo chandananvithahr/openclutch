@@ -24,7 +24,14 @@ const xlsx       = require('xlsx');
 
 const router = express.Router();
 
-const REDIRECT_URI = process.env.DRIVE_REDIRECT_URI || 'http://127.0.0.1:3000/api/drive/callback';
+const PRODUCTION_REDIRECT = 'https://humble-blessing-production.up.railway.app/api/drive/callback';
+function getRedirectUri(req) {
+  if (process.env.DRIVE_REDIRECT_URI) return process.env.DRIVE_REDIRECT_URI;
+  if (!req) return PRODUCTION_REDIRECT;
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
+  return `${protocol}://${host}/api/drive/callback`;
+}
 
 // File types we support reading from Drive
 const READABLE_MIME_TYPES = {
@@ -43,11 +50,11 @@ const { BoundedMap } = require('../lib/bounded-map');
 // Per-user token cache — keyed by userId
 const tokenCache = new BoundedMap(10_000);
 
-function createOAuthClient() {
+function createOAuthClient(req) {
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    REDIRECT_URI,
+    getRedirectUri(req),
   );
 }
 
@@ -83,7 +90,7 @@ router.get('/login', (req, res) => {
   const userId = req.userId;
   if (!userId) return res.status(400).json({ error: 'userId required' });
 
-  const oauth2Client = createOAuthClient();
+  const oauth2Client = createOAuthClient(req);
   const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: ['https://www.googleapis.com/auth/drive.readonly'],
@@ -105,7 +112,7 @@ router.get('/callback', asyncHandler(async (req, res) => {
   }
   if (!code) return res.status(400).send('Missing code');
 
-  const oauth2Client = createOAuthClient();
+  const oauth2Client = createOAuthClient(req);
   const { tokens } = await oauth2Client.getToken(code);
   tokenCache.set(userId, tokens);
 
