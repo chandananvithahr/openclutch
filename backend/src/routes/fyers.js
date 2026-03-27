@@ -62,12 +62,11 @@ function createClient(token, req) {
 // GET /api/fyers/login
 router.get('/login', async (req, res) => {
   const state = await generateState(req.userId);
-  const fyers = new fyersModel();
-  fyers.setAppId(process.env.FYERS_APP_ID);
-  fyers.setRedirectUrl(getRedirectUri(req));
-  fyers.setStateValue(state);
+  const redirectUri = getRedirectUri(req);
+  const appId = process.env.FYERS_APP_ID;
 
-  const loginUrl = fyers.generateAuthCode();
+  // Build auth URL directly — SDK's generateAuthCode() hangs when rate-limited
+  const loginUrl = `https://api-t1.fyers.in/api/v3/generate-authcode?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=${state}`;
 
   if (req.query.json === 'true' || req.headers.accept?.includes('application/json')) {
     return res.json({ loginUrl });
