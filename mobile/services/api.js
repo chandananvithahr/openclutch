@@ -89,12 +89,19 @@ async function authFetch(endpoint, options = {}) {
 // --- API methods ---
 
 export async function sendMessage(messages, tone = 'pro') {
-  const res = await authFetch('/api/chat', {
-    method: 'POST',
-    body: JSON.stringify({ messages, tone }),
-  });
-  if (!res.ok) throw new Error('Network response was not ok');
-  return await res.json();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 55000); // 55s — backend has 60s
+  try {
+    const res = await authFetch('/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ messages, tone }),
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error('Network response was not ok');
+    return await res.json();
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function getChatHistory(limit = 50) {

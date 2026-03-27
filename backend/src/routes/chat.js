@@ -17,7 +17,7 @@ const logger                       = require('../lib/logger');
 const config                       = require('../lib/config');
 const { validateBody, chatSchema } = require('../lib/validation');
 
-const CHAT_TIMEOUT_MS = 45_000;
+const CHAT_TIMEOUT_MS = 60_000;
 function withTimeout(promise, ms) {
   return Promise.race([
     promise,
