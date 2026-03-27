@@ -120,24 +120,22 @@ router.get('/portfolio', async (req, res) => {
       symbols: holdings.map(h => `${h.tradingsymbol}:${h.quantity}`).join(', '),
     });
 
-    // Active holdings (qty > 0) — what Kite shows as "current"
-    const activeHoldings = holdings.filter(h => h.quantity > 0);
-    // Settling/zero-qty holdings — recently bought, may still be in T+1 settlement
-    const settlingHoldings = holdings.filter(h => h.quantity === 0);
-
     let totalValue = 0;
     let totalInvested = 0;
     let totalDayChange = 0;
 
-    const formattedHoldings = activeHoldings.map(h => {
+    // Format ALL holdings — include qty=0 as settling (Kite shows these, API returns qty=0)
+    const formattedHoldings = holdings.map(h => {
+      const settling = h.quantity === 0;
       const currentValue = h.last_price * h.quantity;
       const investedValue = h.average_price * h.quantity;
-      // Use Zerodha's own P&L if available (includes dividends, corp actions)
       const pnl = h.pnl != null ? h.pnl : (currentValue - investedValue);
-      const dayChange = (h.last_price - h.close_price) * h.quantity;
-      totalValue += currentValue;
-      totalInvested += investedValue;
-      totalDayChange += dayChange;
+      const dayChange = settling ? 0 : (h.last_price - h.close_price) * h.quantity;
+      if (!settling) {
+        totalValue += currentValue;
+        totalInvested += investedValue;
+        totalDayChange += dayChange;
+      }
 
       return {
         symbol: h.tradingsymbol,
@@ -150,6 +148,7 @@ router.get('/portfolio', async (req, res) => {
         pnl: parseFloat(pnl.toFixed(2)),
         pnl_percent: investedValue > 0 ? parseFloat(((pnl / investedValue) * 100).toFixed(2)) : 0,
         broker: 'Zerodha',
+        ...(settling && { settling: true }),
       };
     });
 
@@ -181,11 +180,10 @@ router.get('/portfolio', async (req, res) => {
       total_pnl_percent: totalInvested > 0 ? parseFloat(((totalPnl / totalInvested) * 100).toFixed(2)) : 0,
       total_day_change: parseFloat(totalDayChange.toFixed(2)),
       positions_pnl: parseFloat(positionsPnl.toFixed(2)),
-      holdings_count: formattedHoldings.length,
+      holdings_count: formattedHoldings.filter(h => !h.settling).length,
+      settling_count: formattedHoldings.filter(h => h.settling).length,
+      total_stocks: formattedHoldings.length,
       positions_count: formattedPositions.length,
-      raw_api_count: holdings.length,
-      settling_count: settlingHoldings.length,
-      settling: settlingHoldings.map(h => h.tradingsymbol),
       holdings: formattedHoldings,
       positions: formattedPositions,
       brokers_connected: ['Zerodha'],
@@ -226,7 +224,7 @@ async function fetchHoldingsForUser(userId) {
   if (!token) return [];
   const kite = createKite(token);
   const raw = await kite.getHoldings();
-  return raw.filter(h => h.quantity > 0).map(h => ({
+  return raw.map(h => ({
     symbol: h.tradingsymbol,
     name: h.tradingsymbol,
     qty: h.quantity,
@@ -234,6 +232,7 @@ async function fetchHoldingsForUser(userId) {
     current_price: h.last_price,
     pnl: h.pnl != null ? h.pnl : ((h.last_price - h.average_price) * h.quantity),
     broker: 'Zerodha',
+    ...(h.quantity === 0 && { settling: true }),
   }));
 }
 
