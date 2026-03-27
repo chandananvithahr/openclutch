@@ -21,7 +21,7 @@
 
 ## Current State (update this after every session)
 
-**Last updated:** 2026-03-26 | **Last commit:** `b3a3565` — Angel One MPIN fix + timeout
+**Last updated:** 2026-03-27 | **Last commit:** `b3a3565` — Angel One MPIN fix + timeout
 
 ### What's Built ✅
 - Backend: Express server, all routes (chat, zerodha, angelone, upstox, fyers, gmail, calendar, sms, cas, journal, career, health, workflows, onboarding, files, drive)
@@ -48,16 +48,20 @@
 | Angel One | ✅ Working | Connected, empty portfolio (no stocks in account) |
 | Upstox | ❌ Blocked | User's Upstox account is deactivated |
 
+### Security Status ✅ (all fixed in Session 6)
+All 10 findings from CSO audit resolved — see `docs/SECURITY_CRITICALS.md` for details.
+Next CSO audit recommended after major feature additions.
+
 ### What's NOT Built Yet ❌
 - Android device test with Railway backend end-to-end
-- Fix critical security findings (see `docs/SECURITY_CRITICALS.md`)
+- Add ALLOWED_ORIGINS to Railway env
 - Account Aggregator (AA) integration for scale (Finvu/OneMoney — future)
 
 ### Next Up (in order)
-1. Fix critical security: auth bypass (#1 in SECURITY_CRITICALS.md)
-2. Fix Fyers OAuth state bypass, Upstox singleton race condition
-3. Android device end-to-end test
-4. Add ALLOWED_ORIGINS to Railway
+1. Android device end-to-end test (message → AI response on real phone)
+2. Add ALLOWED_ORIGINS to Railway
+3. Run pending SQL in Supabase (if not yet done): `notifications.sql`, `health_data.sql`, `journal_entries.sql`, `career_profiles.sql`, `indexes_and_rls.sql`
+4. Continue mobile UI work (LoginScreen, Sidebar, ConnectionCard uncommitted changes)
 
 ## gstack
 
@@ -562,3 +566,18 @@ Full plan in `docs/VISION.md`. Summary:
 18. Fix critical bugs
 19. Play Store internal testing track
 20. Landing page with demo videos
+
+## Deploy Configuration (configured by /setup-deploy)
+- Platform: Railway (auto-deploys on push to master via GitHub integration)
+- Production URL: https://humble-blessing-production.up.railway.app
+- Deploy workflow: auto-deploy on push to master
+- Deploy status command: HTTP health check
+- Merge method: merge
+- Project type: API (Node.js + Express backend)
+- Post-deploy health check: https://humble-blessing-production.up.railway.app/health
+
+### Custom deploy hooks
+- Pre-merge: none
+- Deploy trigger: automatic on push to master (Railway + GitHub connected)
+- Deploy status: poll production URL
+- Health check: https://humble-blessing-production.up.railway.app/health

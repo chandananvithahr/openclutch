@@ -3,26 +3,25 @@ import { View, Animated, StyleSheet } from 'react-native';
 import { colors, spacing, radius, typography } from '../styles/theme';
 
 export default function TypingIndicator() {
-  const dot1 = useRef(new Animated.Value(0)).current;
-  const dot2 = useRef(new Animated.Value(0)).current;
-  const dot3 = useRef(new Animated.Value(0)).current;
+  const dots = [
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+  ];
 
   useEffect(() => {
-    const animate = (dot, delay) =>
+    const animations = dots.map((dot, i) =>
       Animated.loop(
         Animated.sequence([
-          Animated.delay(delay),
-          Animated.timing(dot, { toValue: 1, duration: 300, useNativeDriver: true }),
-          Animated.timing(dot, { toValue: 0, duration: 300, useNativeDriver: true }),
+          Animated.delay(i * 120),
+          Animated.timing(dot, { toValue: -5, duration: 250, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0, duration: 250, useNativeDriver: true }),
+          Animated.delay(360),
         ])
-      );
-
-    const a1 = animate(dot1, 0);
-    const a2 = animate(dot2, 150);
-    const a3 = animate(dot3, 300);
-
-    a1.start(); a2.start(); a3.start();
-    return () => { a1.stop(); a2.stop(); a3.stop(); };
+      )
+    );
+    animations.forEach(a => a.start());
+    return () => animations.forEach(a => a.stop());
   }, []);
 
   return (
@@ -31,8 +30,11 @@ export default function TypingIndicator() {
         <Animated.Text style={styles.avatarText}>C</Animated.Text>
       </View>
       <View style={styles.bubble}>
-        {[dot1, dot2, dot3].map((dot, i) => (
-          <Animated.View key={i} style={[styles.dot, { opacity: dot }]} />
+        {dots.map((dot, i) => (
+          <Animated.View
+            key={i}
+            style={[styles.dot, { transform: [{ translateY: dot }] }]}
+          />
         ))}
       </View>
     </View>
@@ -41,18 +43,45 @@ export default function TypingIndicator() {
 
 const styles = StyleSheet.create({
   row: {
-    flexDirection: 'row', alignItems: 'flex-end',
-    paddingHorizontal: spacing.md, marginVertical: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingHorizontal: spacing.lg,
+    marginVertical: spacing.sm,
   },
   avatar: {
-    width: 28, height: 28, borderRadius: radius.full,
-    backgroundColor: colors.primary, justifyContent: 'center',
-    alignItems: 'center', marginRight: spacing.sm,
+    width: 30,
+    height: 30,
+    borderRadius: radius.full,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.md,
+    shadowColor: colors.primary,
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 3,
   },
-  avatarText: { color: colors.bg, fontWeight: typography.bold, fontSize: typography.sm },
+  avatarText: {
+    color: colors.bg,
+    fontWeight: typography.bold,
+    fontSize: typography.sm,
+    letterSpacing: -0.3,
+  },
   bubble: {
-    flexDirection: 'row', backgroundColor: colors.surface,
-    padding: 14, borderRadius: 18, borderBottomLeftRadius: 4, gap: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: radius.xl,
+    borderBottomLeftRadius: radius.sm,
+    gap: 5,
   },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.textMuted },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: radius.full,
+    backgroundColor: colors.textMuted,
+  },
 });

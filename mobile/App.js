@@ -1,57 +1,128 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-get-random-values';
-import { v4 as uuidv4 } from 'uuid';
 
+import LoginScreen    from './screens/LoginScreen';
 import OnboardingFlow from './screens/OnboardingFlow';
-import ChatScreen from './screens/ChatScreen';
-import { bootstrapAuth, getToken } from './services/api';
+import ChatScreen     from './screens/ChatScreen';
+import { getToken, clearToken } from './services/api';
 
 const Stack = createStackNavigator();
 
-// Get or create a stable device-scoped userId (replaced by real auth later)
-async function getOrCreateUserId() {
-  let userId = await AsyncStorage.getItem('clutch_user_id');
-  if (!userId) {
-    userId = uuidv4();
-    await AsyncStorage.setItem('clutch_user_id', userId);
-  }
-  return userId;
-}
-
-export default function App() {
-  const [initialRoute, setInitialRoute] = useState(null); // null = loading
+function SplashScreen() {
+  const pulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    async function init() {
-      try {
-        // Ensure we have a JWT before any API calls
-        const existingToken = await getToken();
-        if (!existingToken) {
-          const userId = await getOrCreateUserId();
-          await bootstrapAuth(userId);
-        }
-      } catch (e) {
-        // Auth failed — app will still load; API calls will fail gracefully
-        console.warn('Auth bootstrap failed:', e.message);
-      }
-
-      const done = await AsyncStorage.getItem('onboarding_done');
-      setInitialRoute(done === 'true' ? 'Chat' : 'Onboarding');
-    }
-    init();
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.08, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
   }, []);
 
-  // Show spinner while checking AsyncStorage
-  if (!initialRoute) {
+  return (
+    <View style={splash.root}>
+      <Animated.View style={[splash.logo, { transform: [{ scale: pulse }] }]}>
+        <Text style={splash.logoText}>C</Text>
+      </Animated.View>
+      <Text style={splash.wordmark}>Clutch</Text>
+      <Text style={splash.tagline}>Your life's control room.</Text>
+    </View>
+  );
+}
+
+const splash = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: '#2D1B14',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  logo: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FFE36D',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#FFE36D',
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
+  },
+  logoText: {
+    fontSize: 30,
+    fontWeight: '700',
+    color: '#2D1B14',
+    letterSpacing: -0.5,
+  },
+  wordmark: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#F5F0EB',
+    letterSpacing: 0.2,
+  },
+  tagline: {
+    fontSize: 13,
+    color: '#8B7A6B',
+    marginTop: -4,
+  },
+});
+
+// Auth state machine: 'loading' | 'unauthenticated' | 'onboarding' | 'chat'
+export default function App() {
+  const [authState, setAuthState] = useState('loading');
+
+  const checkAuth = useCallback(async () => {
+    const token = await getToken();
+    if (!token) {
+      setAuthState('unauthenticated');
+      return;
+    }
+    const done = await AsyncStorage.getItem('onboarding_done');
+    setAuthState(done === 'true' ? 'chat' : 'onboarding');
+  }, []);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  // Called by LoginScreen after successful signup or login
+  const handleAuthSuccess = useCallback(async () => {
+    const done = await AsyncStorage.getItem('onboarding_done');
+    setAuthState(done === 'true' ? 'chat' : 'onboarding');
+  }, []);
+
+  // Called by OnboardingFlow on completion
+  const handleOnboardingDone = useCallback(() => {
+    setAuthState('chat');
+  }, []);
+
+  // Called by ChatScreen sidebar logout button
+  const handleLogout = useCallback(async () => {
+    await clearToken();
+    await AsyncStorage.multiRemove(['onboarding_done']);
+    setAuthState('unauthenticated');
+  }, []);
+
+  // Loading splash — pulsing logo
+  if (authState === 'loading') {
+    return <SplashScreen />;
+  }
+
+  // Not logged in → show LoginScreen (outside NavigationContainer — simpler, no nav overhead)
+  if (authState === 'unauthenticated') {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#2D1B14' }}>
-        <ActivityIndicator size="large" color="#FFE36D" />
-      </View>
+      <SafeAreaProvider>
+        <LoginScreen onAuthSuccess={handleAuthSuccess} />
+      </SafeAreaProvider>
     );
   }
 
@@ -59,11 +130,15 @@ export default function App() {
     <SafeAreaProvider>
       <NavigationContainer>
         <Stack.Navigator
-          initialRouteName={initialRoute}
+          initialRouteName={authState === 'chat' ? 'Chat' : 'Onboarding'}
           screenOptions={{ headerShown: false }}
         >
-          <Stack.Screen name="Onboarding" component={OnboardingFlow} />
-          <Stack.Screen name="Chat" component={ChatScreen} />
+          <Stack.Screen name="Onboarding">
+            {(props) => <OnboardingFlow {...props} onDone={handleOnboardingDone} />}
+          </Stack.Screen>
+          <Stack.Screen name="Chat">
+            {(props) => <ChatScreen {...props} onLogout={handleLogout} />}
+          </Stack.Screen>
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

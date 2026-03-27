@@ -40,7 +40,7 @@ const SCROLL_BOTTOM_THRESHOLD = 200; // px from bottom to show scroll button
 const MIN_INPUT_HEIGHT = 44;
 const MAX_INPUT_HEIGHT = 120;
 
-export default function ChatScreen() {
+export default function ChatScreen({ onLogout }) {
   const insets = useSafeAreaInsets();
   const [tone, setTone] = useState('pro');
 
@@ -318,26 +318,38 @@ export default function ChatScreen() {
 
       {/* ===== HEADER ===== */}
       <View style={styles.header}>
+        {/* Hamburger — 3 clean lines */}
         <TouchableOpacity style={styles.headerBtn} onPress={openSidebar}>
-          <Text style={styles.hamburger}>☰</Text>
+          <View style={styles.menuIcon}>
+            <View style={styles.menuLine} />
+            <View style={[styles.menuLine, { width: 14 }]} />
+            <View style={styles.menuLine} />
+          </View>
         </TouchableOpacity>
 
+        {/* Center — app name + tone pill */}
         <TouchableOpacity style={styles.headerCenter} onPress={() => setShowTonePicker(true)}>
           <Text style={styles.headerTitle}>Clutch</Text>
-          <Text style={styles.toneLabel}>{selectedTone.label} ▾</Text>
+          <View style={styles.tonePill}>
+            <Text style={styles.tonePillText}>{selectedTone.label}</Text>
+          </View>
         </TouchableOpacity>
 
+        {/* Right actions */}
         <View style={styles.headerRight}>
           <TouchableOpacity style={styles.headerBtn} onPress={markNotificationsRead}>
-            <Text style={styles.newChatIcon}>🔔</Text>
+            <View style={styles.bellIcon}>
+              <View style={styles.bellTop} />
+              <View style={styles.bellBottom} />
+            </View>
             {notifCount > 0 && (
               <View style={styles.notifBadge}>
                 <Text style={styles.notifBadgeText}>{notifCount > 9 ? '9+' : notifCount}</Text>
               </View>
             )}
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerBtn} onPress={handleNewChat}>
-            <Text style={styles.newChatIcon}>✎</Text>
+          <TouchableOpacity style={[styles.headerBtn, styles.newChatBtn]} onPress={handleNewChat}>
+            <Text style={styles.newChatBtnText}>+</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -397,7 +409,10 @@ export default function ChatScreen() {
             onPress={scrollToBottom}
             pointerEvents={showScrollBtn ? 'auto' : 'none'}
           >
-            <Text style={styles.scrollBtnIcon}>↓</Text>
+            <View style={styles.chevronDown}>
+              <View style={styles.chevronLeft} />
+              <View style={styles.chevronRight} />
+            </View>
           </TouchableOpacity>
         </Animated.View>
       </View>
@@ -417,14 +432,18 @@ export default function ChatScreen() {
             editable={!isTyping}
           />
 
-          {/* Animated send button — Gifted Chat Send.tsx pattern */}
+          {/* Animated send button */}
           <Animated.View style={[styles.sendBtnWrap, { opacity: sendOpacity }]}>
             <TouchableOpacity
               style={[styles.sendBtn, isTyping && styles.sendBtnDisabled]}
               onPress={handleSend}
               disabled={isTyping || !input.trim()}
             >
-              <Text style={styles.sendIcon}>↑</Text>
+              {/* Arrow up — two lines forming chevron */}
+              <View style={styles.sendArrow}>
+                <View style={styles.sendArrowLeft} />
+                <View style={styles.sendArrowRight} />
+              </View>
             </TouchableOpacity>
           </Animated.View>
         </View>
@@ -450,6 +469,7 @@ export default function ChatScreen() {
         onConnectFyers={() => { closeSidebar(); handleFyersConnect(); }}
         onConnectGmail={() => { closeSidebar(); handleGmailConnect(); }}
         backendOnline={backendOnline}
+        onLogout={onLogout}
       />
 
       {/* ===== TONE PICKER ===== */}
@@ -469,7 +489,9 @@ export default function ChatScreen() {
                   </Text>
                   <Text style={styles.toneOptionDesc}>{opt.desc}</Text>
                 </View>
-                {tone === opt.key && <Text style={styles.checkmark}>✓</Text>}
+                {tone === opt.key && (
+                  <View style={styles.selectedDot} />
+                )}
               </TouchableOpacity>
             ))}
           </View>
@@ -558,16 +580,48 @@ const styles = StyleSheet.create({
   // ===== HEADER =====
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg, height: 48,
+    paddingHorizontal: spacing.lg, height: 52,
     borderBottomWidth: 0.5, borderBottomColor: colors.border,
   },
-  headerBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  hamburger: { fontSize: 22, color: colors.textSecondary },
-  headerCenter: { flexDirection: 'row', alignItems: 'center' },
-  headerTitle: { fontSize: 17, fontWeight: typography.bold, color: colors.text },
-  toneLabel: { fontSize: typography.sm, color: colors.textMuted, marginLeft: spacing.sm },
-  newChatIcon: { fontSize: 20, color: colors.textSecondary },
-  headerRight: { flexDirection: 'row', alignItems: 'center' },
+  headerBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  // Custom menu icon — 3 lines
+  menuIcon: { gap: 5, alignItems: 'flex-start' },
+  menuLine: { height: 1.5, width: 18, backgroundColor: colors.textSecondary, borderRadius: 2 },
+  // Center
+  headerCenter: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  headerTitle: { fontSize: 17, fontWeight: typography.bold, color: colors.text, letterSpacing: 0.2 },
+  tonePill: {
+    backgroundColor: colors.bgSubtle,
+    borderRadius: radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  tonePillText: { fontSize: typography.xs, color: colors.textMuted, fontWeight: typography.semibold },
+  // Bell icon — CSS-drawn
+  bellIcon: { alignItems: 'center' },
+  bellTop: {
+    width: 14, height: 12,
+    borderWidth: 1.5, borderColor: colors.textSecondary,
+    borderTopLeftRadius: 7, borderTopRightRadius: 7,
+    borderBottomWidth: 0,
+  },
+  bellBottom: {
+    width: 18, height: 2,
+    backgroundColor: colors.textSecondary,
+    borderRadius: 1,
+    marginTop: 1,
+  },
+  // New chat button — accent pill
+  newChatBtn: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.full,
+    width: 32, height: 32,
+  },
+  newChatBtnText: {
+    fontSize: 22, color: colors.primary, fontWeight: '300',
+    lineHeight: 28, textAlign: 'center',
+  },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   notifBadge: {
     position: 'absolute', top: 4, right: 4,
     backgroundColor: colors.offline, borderRadius: 8,
@@ -608,12 +662,29 @@ const styles = StyleSheet.create({
   },
   scrollBtn: {
     width: 36, height: 36, borderRadius: radius.full,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.bgMuted,
     borderWidth: 1, borderColor: colors.border,
     justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 4, elevation: 4,
+    shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, elevation: 5,
   },
-  scrollBtnIcon: { fontSize: 18, color: colors.textSecondary },
+  chevronDown: {
+    width: 14, height: 8,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+  },
+  chevronLeft: {
+    position: 'absolute', left: 0, top: 0,
+    width: 9, height: 2,
+    backgroundColor: colors.textSecondary,
+    borderRadius: 1,
+    transform: [{ rotate: '45deg' }, { translateX: -1 }],
+  },
+  chevronRight: {
+    position: 'absolute', right: 0, top: 0,
+    width: 9, height: 2,
+    backgroundColor: colors.textSecondary,
+    borderRadius: 1,
+    transform: [{ rotate: '-45deg' }, { translateX: 1 }],
+  },
 
   // ===== INPUT =====
   inputContainer: {
@@ -632,11 +703,30 @@ const styles = StyleSheet.create({
   },
   sendBtnWrap: { marginLeft: spacing.sm, marginBottom: 4 },
   sendBtn: {
-    width: 32, height: 32, borderRadius: radius.full,
-    backgroundColor: colors.text, justifyContent: 'center', alignItems: 'center',
+    width: 34, height: 34, borderRadius: radius.full,
+    backgroundColor: colors.primary,
+    justifyContent: 'center', alignItems: 'center',
   },
-  sendBtnDisabled: { backgroundColor: colors.textMuted },
-  sendIcon: { color: colors.bg, fontSize: 18, fontWeight: 'bold' },
+  sendBtnDisabled: { opacity: 0.5 },
+  // Chevron-up icon drawn with two rotated bars
+  sendArrow: {
+    width: 14, height: 10,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+  },
+  sendArrowLeft: {
+    position: 'absolute', left: 0, bottom: 0,
+    width: 9, height: 2,
+    backgroundColor: colors.bg,
+    borderRadius: 1,
+    transform: [{ rotate: '-45deg' }, { translateX: -1 }],
+  },
+  sendArrowRight: {
+    position: 'absolute', right: 0, bottom: 0,
+    width: 9, height: 2,
+    backgroundColor: colors.bg,
+    borderRadius: 1,
+    transform: [{ rotate: '45deg' }, { translateX: 1 }],
+  },
 
   // ===== TONE PICKER =====
   modalOverlay: {
@@ -660,7 +750,10 @@ const styles = StyleSheet.create({
   toneOptionLabel: { fontSize: typography.base, fontWeight: typography.semibold, color: colors.textSecondary },
   toneOptionLabelActive: { color: colors.primary },
   toneOptionDesc: { fontSize: typography.xs, color: colors.textMuted, marginTop: 2 },
-  checkmark: { color: colors.primary, fontSize: 18, fontWeight: typography.bold },
+  selectedDot: {
+    width: 8, height: 8, borderRadius: radius.full,
+    backgroundColor: colors.primary,
+  },
 
   // ===== ANGEL ONE MODAL =====
   credModalBox: {

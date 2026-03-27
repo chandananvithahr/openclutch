@@ -41,6 +41,15 @@ function MessageBubble({ message }) {
     );
   }
 
+  // System / error messages — centered, no avatar
+  if (message.role === 'system') {
+    return (
+      <Animated.View style={[styles.systemRow, { opacity: fadeAnim }]}>
+        <Text style={styles.systemText}>{message.content}</Text>
+      </Animated.View>
+    );
+  }
+
   return (
     <Animated.View
       style={[
@@ -164,7 +173,7 @@ const markdownStyles = {
 };
 
 const styles = StyleSheet.create({
-  // User message — right-aligned pill
+  // User message — right-aligned, yellow accent (Cleo signature)
   userRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -172,8 +181,9 @@ const styles = StyleSheet.create({
     marginVertical: spacing.xs,
   },
   userBubble: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.primary,
     borderRadius: radius.xl,
+    borderBottomRightRadius: radius.sm,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md - 2,
     maxWidth: '80%',
@@ -181,7 +191,21 @@ const styles = StyleSheet.create({
   userText: {
     fontSize: typography.base,
     lineHeight: typography.normal,
-    color: colors.text,
+    color: colors.bg,
+    fontWeight: typography.medium,
+  },
+
+  // System message — centered subtle text
+  systemRow: {
+    paddingHorizontal: spacing.xxl,
+    marginVertical: spacing.sm,
+    alignItems: 'center',
+  },
+  systemText: {
+    fontSize: typography.xs,
+    color: colors.textFaint,
+    textAlign: 'center',
+    lineHeight: 16,
   },
 
   // Assistant message — icon + full-width text
@@ -192,19 +216,26 @@ const styles = StyleSheet.create({
     marginVertical: spacing.sm,
   },
   iconWrap: {
-    width: 28,
-    height: 28,
+    width: 30,
+    height: 30,
     borderRadius: radius.full,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.md,
-    marginTop: 2,
+    marginTop: 1,
+    // Subtle glow — premium feel
+    shadowColor: colors.primary,
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 3,
   },
   iconText: {
     color: colors.bg,
     fontWeight: typography.bold,
     fontSize: typography.sm,
+    letterSpacing: -0.3,
   },
   assistantContent: { flex: 1 },
 });

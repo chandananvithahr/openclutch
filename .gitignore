@@ -48,3 +48,9 @@ reference/
 
 # Notes (personal, not project docs)
 notes/
+.gstack/
+
+# Skill zips and local tooling docs
+*.zip
+UIUX\ SKILL.md
+ui-ux-pro-max-skill-main/

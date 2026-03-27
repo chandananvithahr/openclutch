@@ -2,57 +2,60 @@ import React, { memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { colors, spacing, radius, typography } from '../styles/theme';
 
+// No emoji — clean letter avatars with brand colors
 const SERVICE_META = {
-  zerodha: { label: 'Zerodha', icon: '📈', desc: 'See your stock portfolio' },
-  angelone: { label: 'Angel One', icon: '📊', desc: 'Track your investments' },
-  upstox: { label: 'Upstox', icon: '📉', desc: 'View holdings & P&L' },
-  fyers: { label: 'Fyers', icon: '💹', desc: 'Portfolio & live prices' },
-  gmail: { label: 'Gmail', icon: '📧', desc: 'Email insights & job alerts' },
-  broker: { label: 'a broker', icon: '🔗', desc: 'Connect any broker to get started' },
+  zerodha:   { label: 'Zerodha',   initial: 'Z', color: '#387ED1', desc: 'See your stock portfolio' },
+  angelone:  { label: 'Angel One', initial: 'A', color: '#E84040', desc: 'Track your investments' },
+  upstox:    { label: 'Upstox',    initial: 'U', color: '#5367FF', desc: 'View holdings & P&L' },
+  fyers:     { label: 'Fyers',     initial: 'F', color: '#F26722', desc: 'Portfolio & live prices' },
+  gmail:     { label: 'Gmail',     initial: 'G', color: '#D44638', desc: 'Email insights & job alerts' },
+  broker:    { label: 'Broker',    initial: '↗', color: colors.primary, desc: 'Connect a broker to get started' },
 };
 
-// Keywords that suggest the user needs a specific service connected
 const SERVICE_KEYWORDS = {
-  zerodha: ['zerodha', 'kite'],
+  zerodha:  ['zerodha', 'kite'],
   angelone: ['angel one', 'angelone', 'angel'],
-  upstox: ['upstox'],
-  fyers: ['fyers'],
-  gmail: ['gmail', 'email', 'emails', 'inbox'],
-  broker: ['portfolio', 'holdings', 'stocks', 'mutual fund', 'broker', 'connect your'],
+  upstox:   ['upstox'],
+  fyers:    ['fyers'],
+  gmail:    ['gmail', 'email', 'emails', 'inbox'],
+  broker:   ['portfolio', 'holdings', 'stocks', 'mutual fund', 'broker', 'connect your'],
 };
 
 function ConnectionCard({ service, onConnect }) {
   const meta = SERVICE_META[service] || SERVICE_META.broker;
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onConnect} activeOpacity={0.7}>
-      <Text style={styles.icon}>{meta.icon}</Text>
+    <TouchableOpacity style={styles.card} onPress={onConnect} activeOpacity={0.75}>
+      {/* Letter avatar */}
+      <View style={[styles.initial, { backgroundColor: meta.color + '22' }]}>
+        <Text style={[styles.initialText, { color: meta.color }]}>{meta.initial}</Text>
+      </View>
+
+      {/* Info */}
       <View style={styles.info}>
         <Text style={styles.label}>Connect {meta.label}</Text>
         <Text style={styles.desc}>{meta.desc}</Text>
       </View>
-      <View style={styles.connectBtn}>
-        <Text style={styles.connectText}>Connect</Text>
+
+      {/* Arrow CTA */}
+      <View style={styles.arrow}>
+        <Text style={styles.arrowText}>›</Text>
       </View>
     </TouchableOpacity>
   );
 }
 
-// Given a message string + connection state, returns which services to prompt
 export function detectConnectionPrompts(content, connectedServices) {
   if (!content) return [];
   const lower = content.toLowerCase();
   const prompts = [];
 
   for (const [service, keywords] of Object.entries(SERVICE_KEYWORDS)) {
-    if (service === 'broker') continue; // check broker last
-    if (connectedServices[service]) continue; // already connected
-    if (keywords.some(kw => lower.includes(kw))) {
-      prompts.push(service);
-    }
+    if (service === 'broker') continue;
+    if (connectedServices[service]) continue;
+    if (keywords.some(kw => lower.includes(kw))) prompts.push(service);
   }
 
-  // Generic broker prompt — if message mentions portfolio/holdings but no specific broker matched
   if (
     prompts.length === 0 &&
     SERVICE_KEYWORDS.broker.some(kw => lower.includes(kw)) &&
@@ -73,41 +76,54 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.bgMuted,
     borderRadius: radius.lg,
-    padding: spacing.md,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
     marginHorizontal: spacing.lg,
     marginTop: spacing.xs,
     marginBottom: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
+    gap: spacing.md,
   },
-  icon: {
-    fontSize: 24,
-    marginRight: spacing.md,
+  initial: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  info: {
-    flex: 1,
+  initialText: {
+    fontSize: 15,
+    fontWeight: typography.bold,
+    letterSpacing: -0.3,
   },
+  info: { flex: 1 },
   label: {
-    fontSize: typography.sm + 1,
+    fontSize: typography.sm,
     fontWeight: typography.semibold,
     color: colors.text,
   },
   desc: {
     fontSize: typography.xs,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     marginTop: 2,
+    lineHeight: 16,
   },
-  connectBtn: {
+  arrow: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.full,
     backgroundColor: colors.primary,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  connectText: {
+  arrowText: {
     color: colors.bg,
-    fontSize: typography.sm,
+    fontSize: 20,
     fontWeight: typography.bold,
+    lineHeight: 24,
+    textAlign: 'center',
   },
 });

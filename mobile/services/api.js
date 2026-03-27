@@ -1,7 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import BACKEND_URL, { AUTH_BOOTSTRAP_SECRET } from './config';
+import BACKEND_URL from './config';
 
-const TOKEN_KEY = 'clutch_jwt_token';
+const TOKEN_KEY   = 'clutch_jwt_token';
+const USER_ID_KEY = 'clutch_user_id';
+const USER_NAME_KEY = 'clutch_user_name';
 
 // --- Token management ---
 
@@ -17,18 +19,48 @@ export async function clearToken() {
   return AsyncStorage.removeItem(TOKEN_KEY);
 }
 
-// Bootstrap: get a JWT from the backend for a userId
-// In production this will be replaced by proper auth (Supabase Auth / OTP)
-export async function bootstrapAuth(userId) {
-  const res = await fetch(`${BACKEND_URL}/api/auth/token`, {
+export async function getStoredUserId() {
+  return AsyncStorage.getItem(USER_ID_KEY);
+}
+
+export async function getStoredUserName() {
+  return AsyncStorage.getItem(USER_NAME_KEY);
+}
+
+// --- Real auth: signup / login ---
+
+// Returns { token, userId, name } on success. Throws with message on failure.
+export async function signup(name, email, password) {
+  const res = await fetch(`${BACKEND_URL}/api/auth/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, secret: AUTH_BOOTSTRAP_SECRET }),
+    body: JSON.stringify({ name, email, password }),
   });
-  if (!res.ok) throw new Error('Failed to get auth token');
-  const { token } = await res.json();
-  await setToken(token);
-  return token;
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Signup failed');
+  await setToken(data.token);
+  await AsyncStorage.setItem(USER_ID_KEY, data.userId);
+  await AsyncStorage.setItem(USER_NAME_KEY, name);
+  return data;
+}
+
+// Returns { token, userId, name } on success. Throws with message on failure.
+export async function login(email, password) {
+  const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Login failed');
+  await setToken(data.token);
+  await AsyncStorage.setItem(USER_ID_KEY, data.userId);
+  if (data.name) await AsyncStorage.setItem(USER_NAME_KEY, data.name);
+  return data;
+}
+
+export async function logout() {
+  await AsyncStorage.multiRemove([TOKEN_KEY, USER_ID_KEY, USER_NAME_KEY]);
 }
 
 // --- Authenticated fetch wrapper ---
@@ -46,26 +78,9 @@ async function authFetch(endpoint, options = {}) {
     headers,
   });
 
-  // If 401, token is expired — try re-bootstrap once
+  // 401 = token expired — clear it so App.js re-routes to Login on next render
   if (res.status === 401) {
     await clearToken();
-    try {
-      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-      const userId = await AsyncStorage.getItem('clutch_user_id');
-      if (userId) {
-        await bootstrapAuth(userId);
-        // Retry the original request with fresh token
-        const newToken = await getToken();
-        const retryHeaders = {
-          ...options.headers,
-          'Content-Type': 'application/json',
-          ...(newToken ? { Authorization: `Bearer ${newToken}` } : {}),
-        };
-        return fetch(`${BACKEND_URL}${endpoint}`, { ...options, headers: retryHeaders });
-      }
-    } catch {
-      // Re-bootstrap failed — return original 401
-    }
   }
 
   return res;

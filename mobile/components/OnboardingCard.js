@@ -104,9 +104,12 @@ export default function OnboardingCard({
       {/* Input / choice area */}
       <View style={styles.inputArea}>{children}</View>
 
-      {/* AI micro-insight reaction */}
+      {/* AI micro-insight — looks like a chat message from Clutch */}
       {reactionText ? (
         <Animated.View style={[styles.reactionBubble, { opacity: reactionFade }]}>
+          <View style={styles.reactionAvatar}>
+            <Text style={styles.reactionAvatarText}>C</Text>
+          </View>
           <Text style={styles.reactionText}>{reactionText}</Text>
         </Animated.View>
       ) : null}
@@ -151,27 +154,47 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   reactionBubble: {
+    flexDirection:   'row',
+    alignItems:      'flex-start',
     backgroundColor: COLORS.card,
     borderRadius:    14,
-    paddingVertical:   12,
-    paddingHorizontal: 16,
+    borderBottomLeftRadius: 4,
+    paddingVertical:   13,
+    paddingHorizontal: 14,
     marginBottom:    16,
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.accent,
+    gap:             10,
+  },
+  reactionAvatar: {
+    width:           22,
+    height:          22,
+    borderRadius:    11,
+    backgroundColor: COLORS.accent,
+    justifyContent:  'center',
+    alignItems:      'center',
+    marginTop:       1,
+  },
+  reactionAvatarText: {
+    fontSize:   11,
+    fontWeight: '700',
+    color:      COLORS.bg,
   },
   reactionText: {
+    flex:       1,
     fontSize:   14,
     color:      COLORS.textPrimary,
     lineHeight: 20,
   },
   skipButton: {
-    alignSelf:    'center',
-    marginTop:    'auto',
-    paddingTop:   16,
+    alignSelf:  'center',
+    marginTop:  'auto',
+    paddingTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   skipText: {
     fontSize:  15,
     color:     COLORS.textSecondary,
-    textDecorationLine: 'underline',
   },
 });
