@@ -151,7 +151,7 @@ const connectedApps = {
   async loadToken(userId, appName) {
     const { data, error } = await supabase
       .from('connected_apps')
-      .select('access_token, refresh_token, updated_at')
+      .select('access_token, updated_at')
       .eq('user_id', userId)
       .eq('app_name', appName)
       .single();
