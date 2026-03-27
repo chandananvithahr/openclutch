@@ -7,6 +7,9 @@ import { colors, spacing, radius, typography } from '../styles/theme';
 function MessageBubble({ message }) {
   const isUser = message.role === 'user';
 
+  // Don't render empty streaming bubble — TypingIndicator covers this state
+  if (message.streaming && !message.content) return null;
+
   const handleLongPress = useCallback(() => {
     if (!message.content) return;
     Clipboard.setString(message.content);
@@ -66,14 +69,14 @@ function MessageBubble({ message }) {
       <View style={styles.iconWrap}>
         <Text style={styles.iconText}>C</Text>
       </View>
-      <Pressable style={styles.assistantContent} onLongPress={handleLongPress} android_ripple={null}>
+      <View style={styles.assistantContent} onTouchEnd={handleLongPress}>
         {message.content ? (
           <Markdown style={markdownStyles}>{message.content}</Markdown>
         ) : null}
         {message.chartData ? (
           <PortfolioChart data={message.chartData} />
         ) : null}
-      </Pressable>
+      </View>
     </Animated.View>
   );
 }
