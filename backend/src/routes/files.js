@@ -164,4 +164,57 @@ router.post('/analyze', upload.single('file'), asyncHandler(async (req, res) => 
   });
 }));
 
+// POST /api/files/analyze-image
+// Body: multipart/form-data — file (image) + optional { question, tone }
+// Uses GPT-4o-mini vision to analyze images
+const imageUpload = multer({
+  dest: 'uploads/',
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB for images
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) return cb(null, true);
+    cb(new Error('Only image files are supported for image analysis.'));
+  },
+});
+
+router.post('/analyze-image', imageUpload.single('file'), asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw new HTTPError(400, 'No image uploaded.');
+  }
+
+  const { tone = 'pro' } = req.body;
+  const question = typeof req.body.question === 'string'
+    ? req.body.question.slice(0, 500)
+    : 'Describe and analyze this image in detail. Highlight key information, numbers, text, or anything important.';
+  const { path: filePath, mimetype, originalname } = req.file;
+
+  let base64;
+  try {
+    const buffer = await fs.promises.readFile(filePath);
+    base64 = buffer.toString('base64');
+  } finally {
+    fs.unlink(filePath, () => {});
+  }
+
+  const { openai } = require('../lib/ai');
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: question },
+          { type: 'image_url', image_url: { url: `data:${mimetype};base64,${base64}` } },
+        ],
+      },
+    ],
+    max_tokens: 1500,
+  });
+
+  const reply = response.choices[0].message.content;
+
+  logger.info('Image analyzed', { file: originalname, type: mimetype });
+
+  res.json({ reply, fileMeta: { name: originalname, type: 'image' } });
+}));
+
 module.exports = router;

@@ -289,7 +289,7 @@ export default function ChatScreen({ onLogout }) {
     }
   }, [angelCreds]);
 
-  // Send — delegates to useChat hook, uploads attachments if any
+  // Send — uploads attachments then delegates to useChat
   const handleSend = useCallback(async () => {
     const text = input.trim();
     const hasAttachments = attachments.length > 0;
@@ -300,42 +300,55 @@ export default function ChatScreen({ onLogout }) {
     setInputHeight(MIN_INPUT_HEIGHT);
     setAttachments([]);
 
-    if (hasAttachments) {
-      const docAttachments = currentAttachments.filter(a => !a.isImage);
-      const imageAttachments = currentAttachments.filter(a => a.isImage);
-
-      // Upload documents to /api/files/analyze — backend analyzes and returns AI reply
-      for (const att of docAttachments) {
-        try {
-          const formData = new FormData();
-          formData.append('file', { uri: att.uri, name: att.name, type: att.type });
-          if (text) formData.append('question', text);
-          const token = await getToken();
-          const endpoint = att.name?.toLowerCase().includes('cas') && att.name?.toLowerCase().endsWith('.pdf')
-            ? '/api/cas/upload' : '/api/files/analyze';
-          const res = await fetch(`${BACKEND_URL}${endpoint}`, {
-            method: 'POST',
-            headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-            body: formData,
-          });
-          const data = await res.json();
-          if (data.error) {
-            Alert.alert('Upload failed', data.error);
-          }
-        } catch (e) {
-          Alert.alert('Upload error', e?.message || 'Failed to upload file');
-        }
-      }
-
-      // Send message with file context so AI knows what was uploaded
-      const allNames = currentAttachments.map(a => a.name).join(', ');
-      const msgText = text
-        ? `${text}\n\n(Attached: ${allNames})`
-        : `I've uploaded: ${allNames}. Please analyze.`;
-      await send(msgText);
-    } else {
+    if (!hasAttachments) {
       await send(text);
+      return;
     }
+
+    // Build preview data for message bubble
+    const previewAttachments = currentAttachments.map(a => ({
+      uri: a.uri, name: a.name, isImage: a.isImage,
+    }));
+
+    // Upload files to backend, collect AI analysis results
+    const analysisResults = [];
+    const token = await getToken();
+
+    for (const att of currentAttachments) {
+      try {
+        const formData = new FormData();
+        formData.append('file', { uri: att.uri, name: att.name, type: att.type });
+        if (text) formData.append('question', text);
+
+        let endpoint;
+        if (att.isImage) {
+          endpoint = '/api/files/analyze-image';
+        } else if (att.name?.toLowerCase().includes('cas') && att.name?.toLowerCase().endsWith('.pdf')) {
+          endpoint = '/api/cas/upload';
+        } else {
+          endpoint = '/api/files/analyze';
+        }
+
+        const res = await fetch(`${BACKEND_URL}${endpoint}`, {
+          method: 'POST',
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: formData,
+        });
+        const data = await res.json();
+        if (data.reply) analysisResults.push(data.reply);
+        if (data.error) Alert.alert('Upload failed', data.error);
+      } catch (e) {
+        Alert.alert('Upload error', e?.message || 'Failed to upload');
+      }
+    }
+
+    // Send with analysis context so AI has the file content
+    const contextParts = [];
+    if (text) contextParts.push(text);
+    if (analysisResults.length > 0) {
+      contextParts.push(`[File analysis results]\n${analysisResults.join('\n\n')}`);
+    }
+    await send(contextParts.join('\n\n') || 'Analyze my attachments', previewAttachments);
   }, [input, isTyping, send, attachments]);
 
   const handleNewChat = useCallback(() => {

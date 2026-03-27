@@ -38,10 +38,14 @@ export function useChat(tone) {
     ));
   }, []);
 
-  const send = useCallback(async (text) => {
-    if (!text.trim() || isTyping) return false;
+  // send accepts optional attachments array for preview in message bubbles
+  const send = useCallback(async (text, sendAttachments = []) => {
+    if ((!text.trim() && sendAttachments.length === 0) || isTyping) return false;
 
-    const userMsg = { id: Date.now().toString(), role: 'user', content: text.trim() };
+    const userMsg = {
+      id: Date.now().toString(), role: 'user', content: text.trim(),
+      ...(sendAttachments.length > 0 && { attachments: sendAttachments }),
+    };
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
     setIsTyping(true);

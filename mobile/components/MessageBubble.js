@@ -1,5 +1,5 @@
 import React, { memo, useRef, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Animated, Pressable, Clipboard, ToastAndroid } from 'react-native';
+import { View, Text, Image, StyleSheet, Animated, Pressable, Clipboard, ToastAndroid } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import PortfolioChart from './PortfolioChart';
 import { colors, spacing, radius, typography } from '../styles/theme';
@@ -33,6 +33,12 @@ function MessageBubble({ message }) {
     ]).start();
   }, []);
 
+  // Strip "[File analysis results]..." from displayed text — that's internal context
+  const displayContent = isUser
+    ? (message.content || '').replace(/\n*\[File analysis results\][\s\S]*/g, '').trim()
+    : message.content;
+  const hasAttachments = message.attachments?.length > 0;
+
   if (isUser) {
     return (
       <Animated.View
@@ -42,7 +48,24 @@ function MessageBubble({ message }) {
         ]}
       >
         <Pressable onLongPress={handleLongPress} android_ripple={null} style={styles.userBubble}>
-          <Text style={styles.userText}>{message.content}</Text>
+          {/* Attachment previews */}
+          {hasAttachments && (
+            <View style={styles.attachRow}>
+              {message.attachments.map((att, i) => (
+                att.isImage ? (
+                  <Image key={i} source={{ uri: att.uri }} style={styles.attachImage} />
+                ) : (
+                  <View key={i} style={styles.attachFile}>
+                    <Text style={styles.attachFileIcon}>
+                      {att.name?.endsWith('.pdf') ? '📄' : att.name?.endsWith('.csv') ? '📊' : '📎'}
+                    </Text>
+                    <Text style={styles.attachFileName} numberOfLines={1}>{att.name}</Text>
+                  </View>
+                )
+              ))}
+            </View>
+          )}
+          {displayContent ? <Text style={styles.userText}>{displayContent}</Text> : null}
         </Pressable>
       </Animated.View>
     );
@@ -245,4 +268,24 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   assistantContent: { flex: 1 },
+
+  // Attachment previews in user bubbles
+  attachRow: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 6,
+    marginBottom: spacing.xs,
+  },
+  attachImage: {
+    width: 120, height: 120, borderRadius: radius.md,
+    backgroundColor: colors.bgMuted,
+  },
+  attachFile: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.15)', borderRadius: radius.sm,
+    paddingHorizontal: 8, paddingVertical: 4,
+  },
+  attachFileIcon: { fontSize: 16 },
+  attachFileName: {
+    fontSize: typography.xs, color: colors.bg,
+    maxWidth: 100,
+  },
 });
