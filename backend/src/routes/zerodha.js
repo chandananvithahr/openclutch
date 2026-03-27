@@ -112,7 +112,14 @@ router.get('/portfolio', async (req, res) => {
     const [holdings, positions, mfHoldings] = await Promise.all([
       kite.getHoldings(),
       kite.getPositions(),
-      kite.getMFHoldings().catch(err => {
+      kite.getMFHoldings().then(res => {
+        // SDK may return error object instead of throwing
+        if (!Array.isArray(res)) {
+          logger.warn('Zerodha MF holdings: non-array response', { type: typeof res, msg: res?.message });
+          return [];
+        }
+        return res;
+      }).catch(err => {
         logger.warn('Zerodha MF holdings fetch failed', { err: err.message });
         return [];
       }),
@@ -260,7 +267,7 @@ async function fetchHoldingsForUser(userId) {
   const kite = createKite(token);
   const [raw, mfRaw] = await Promise.all([
     kite.getHoldings(),
-    kite.getMFHoldings().catch(() => []),
+    kite.getMFHoldings().then(r => Array.isArray(r) ? r : []).catch(() => []),
   ]);
   const equity = raw.map(h => ({
     symbol: h.tradingsymbol,
