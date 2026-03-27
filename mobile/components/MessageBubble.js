@@ -40,10 +40,8 @@ function MessageBubble({ message }) {
           { opacity: fadeAnim, transform: [{ translateX: slideAnim }] },
         ]}
       >
-        <Pressable onLongPress={handleLongPress} android_ripple={null}>
-          <View style={styles.userBubble}>
-            <Text style={styles.userText}>{message.content}</Text>
-          </View>
+        <Pressable onLongPress={handleLongPress} android_ripple={null} style={styles.userBubble}>
+          <Text style={styles.userText}>{message.content}</Text>
         </Pressable>
       </Animated.View>
     );

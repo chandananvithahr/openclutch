@@ -157,6 +157,7 @@ export default function ChatScreen({ onLogout }) {
       try {
         const history = await getChatHistory(50);
         loadHistory(history);
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
       } catch (e) {
         console.warn('Chat history load failed:', e?.message);
       }
@@ -398,7 +399,7 @@ export default function ChatScreen({ onLogout }) {
           data={messages}
           keyExtractor={item => item.id}
           renderItem={renderItem}
-          ListFooterComponent={isTyping ? <TypingIndicator /> : null}
+          ListFooterComponent={null}
           contentContainerStyle={styles.messageList}
           style={styles.flatList}
           keyboardShouldPersistTaps="handled"
