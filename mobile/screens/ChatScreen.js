@@ -57,11 +57,11 @@ export default function ChatScreen({ onLogout }) {
   const sendOpacity = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(sendOpacity, {
-      toValue: input.trim() ? 1 : 0,
+      toValue: (input.trim() || attachments.length > 0) ? 1 : 0,
       duration: 150,
       useNativeDriver: true,
     }).start();
-  }, [input]);
+  }, [input, attachments]);
 
   // Scroll-to-bottom button — myChat ChatHistory + Gifted Chat MessagesContainer pattern
   const [showScrollBtn, setShowScrollBtn] = useState(false);
@@ -300,12 +300,16 @@ export default function ChatScreen({ onLogout }) {
     setInputHeight(MIN_INPUT_HEIGHT);
     setAttachments([]);
 
-    // If attachments, upload each then send message
     if (hasAttachments) {
-      for (const att of currentAttachments) {
+      const docAttachments = currentAttachments.filter(a => !a.isImage);
+      const imageAttachments = currentAttachments.filter(a => a.isImage);
+
+      // Upload documents to /api/files/analyze — backend analyzes and returns AI reply
+      for (const att of docAttachments) {
         try {
           const formData = new FormData();
           formData.append('file', { uri: att.uri, name: att.name, type: att.type });
+          if (text) formData.append('question', text);
           const token = await getToken();
           const endpoint = att.name?.toLowerCase().includes('cas') && att.name?.toLowerCase().endsWith('.pdf')
             ? '/api/cas/upload' : '/api/files/analyze';
@@ -315,13 +319,20 @@ export default function ChatScreen({ onLogout }) {
             body: formData,
           });
           const data = await res.json();
-          if (data.error) Alert.alert('Upload failed', data.error);
+          if (data.error) {
+            Alert.alert('Upload failed', data.error);
+          }
         } catch (e) {
           Alert.alert('Upload error', e?.message || 'Failed to upload file');
         }
       }
-      const fileNames = currentAttachments.map(a => a.name).join(', ');
-      await send(text || `Analyze: ${fileNames}`);
+
+      // Send message with file context so AI knows what was uploaded
+      const allNames = currentAttachments.map(a => a.name).join(', ');
+      const msgText = text
+        ? `${text}\n\n(Attached: ${allNames})`
+        : `I've uploaded: ${allNames}. Please analyze.`;
+      await send(msgText);
     } else {
       await send(text);
     }
@@ -333,15 +344,15 @@ export default function ChatScreen({ onLogout }) {
     closeSidebar();
   }, [reset, closeSidebar]);
 
+  // Attachment state — Claude-style preview inside input card
+  const [attachments, setAttachments] = useState([]);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+
   // Auto-height TextInput — Gifted Chat Composer.tsx pattern
   const handleContentSizeChange = useCallback(({ nativeEvent }) => {
     const h = Math.min(Math.max(nativeEvent.contentSize.height, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT);
     setInputHeight(h);
   }, []);
-
-  // Attachment state — Claude-style preview inside input card
-  const [attachments, setAttachments] = useState([]);
-  const [showAttachMenu, setShowAttachMenu] = useState(false);
 
   const addAttachment = useCallback((file) => {
     setAttachments(prev => [...prev, {
