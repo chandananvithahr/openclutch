@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
+  View, Text, TextInput, TouchableOpacity, Image,
   FlatList, StyleSheet, StatusBar, Modal, Alert,
   Animated, Dimensions, KeyboardAvoidingView, Platform,
 } from 'react-native';
@@ -15,6 +15,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { requestSmsPermission, syncSmsTransactions } from '../services/smsParser';
 import { useChat } from '../hooks/useChat';
 import ConnectionCard, { detectConnectionPrompts } from '../components/ConnectionCard';
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 
 const TONE_OPTIONS = [
   { key: 'bhai', label: 'Bhai', desc: 'Casual, Hinglish' },
@@ -287,14 +289,43 @@ export default function ChatScreen({ onLogout }) {
     }
   }, [angelCreds]);
 
-  // Send — delegates to useChat hook
+  // Send — delegates to useChat hook, uploads attachments if any
   const handleSend = useCallback(async () => {
     const text = input.trim();
-    if (!text || isTyping) return;
+    const hasAttachments = attachments.length > 0;
+    if ((!text && !hasAttachments) || isTyping) return;
+
+    const currentAttachments = [...attachments];
     setInput('');
     setInputHeight(MIN_INPUT_HEIGHT);
-    await send(text);
-  }, [input, isTyping, send]);
+    setAttachments([]);
+
+    // If attachments, upload each then send message
+    if (hasAttachments) {
+      for (const att of currentAttachments) {
+        try {
+          const formData = new FormData();
+          formData.append('file', { uri: att.uri, name: att.name, type: att.type });
+          const token = await getToken();
+          const endpoint = att.name?.toLowerCase().includes('cas') && att.name?.toLowerCase().endsWith('.pdf')
+            ? '/api/cas/upload' : '/api/files/analyze';
+          const res = await fetch(`${BACKEND_URL}${endpoint}`, {
+            method: 'POST',
+            headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: formData,
+          });
+          const data = await res.json();
+          if (data.error) Alert.alert('Upload failed', data.error);
+        } catch (e) {
+          Alert.alert('Upload error', e?.message || 'Failed to upload file');
+        }
+      }
+      const fileNames = currentAttachments.map(a => a.name).join(', ');
+      await send(text || `Analyze: ${fileNames}`);
+    } else {
+      await send(text);
+    }
+  }, [input, isTyping, send, attachments]);
 
   const handleNewChat = useCallback(() => {
     reset();
@@ -307,6 +338,61 @@ export default function ChatScreen({ onLogout }) {
     const h = Math.min(Math.max(nativeEvent.contentSize.height, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT);
     setInputHeight(h);
   }, []);
+
+  // Attachment state — Claude-style preview inside input card
+  const [attachments, setAttachments] = useState([]);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+
+  const addAttachment = useCallback((file) => {
+    setAttachments(prev => [...prev, {
+      id: `att-${Date.now()}`,
+      uri: file.uri,
+      name: file.name || 'image.jpg',
+      type: file.mimeType || file.type || 'application/octet-stream',
+      isImage: (file.mimeType || file.type || '').startsWith('image/'),
+    }]);
+  }, []);
+
+  const removeAttachment = useCallback((id) => {
+    setAttachments(prev => prev.filter(a => a.id !== id));
+  }, []);
+
+  // Camera
+  const handleCamera = useCallback(async () => {
+    setShowAttachMenu(false);
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Permission needed', 'Camera access is required.'); return; }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+    if (!result.canceled) addAttachment(result.assets[0]);
+  }, [addAttachment]);
+
+  // Photo gallery
+  const handlePhotos = useCallback(async () => {
+    setShowAttachMenu(false);
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Permission needed', 'Photo access is required.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+      allowsMultipleSelection: true,
+      selectionLimit: 5,
+    });
+    if (!result.canceled) result.assets.forEach(addAttachment);
+  }, [addAttachment]);
+
+  // File picker (PDF, Excel, CSV)
+  const handleFiles = useCallback(async () => {
+    setShowAttachMenu(false);
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['application/pdf', 'text/csv',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'image/*'],
+      copyToCacheDirectory: true,
+      multiple: true,
+    });
+    if (!result.canceled) result.assets.forEach(addAttachment);
+  }, [addAttachment]);
 
   const selectedTone = TONE_OPTIONS.find(t => t.key === tone);
 
@@ -411,10 +497,32 @@ export default function ChatScreen({ onLogout }) {
 
       </View>
 
-      {/* ===== INPUT BAR ===== */}
-      <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 4) }]}>
-        {/* Text input — full width */}
-        <View style={styles.inputBox}>
+      {/* ===== INPUT BAR — Claude-style single container ===== */}
+      <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 2) }]}>
+        <View style={styles.inputCard}>
+          {/* Attachment previews inside the input card */}
+          {attachments.length > 0 && (
+            <View style={styles.attachPreviewRow}>
+              {attachments.map(att => (
+                <View key={att.id} style={styles.attachPreview}>
+                  {att.isImage ? (
+                    <Image source={{ uri: att.uri }} style={styles.attachThumb} />
+                  ) : (
+                    <View style={styles.attachFileCard}>
+                      <Text style={styles.attachFileIcon}>
+                        {att.name?.endsWith('.pdf') ? '📄' : att.name?.endsWith('.csv') ? '📊' : '📎'}
+                      </Text>
+                      <Text style={styles.attachFileName} numberOfLines={1}>{att.name}</Text>
+                    </View>
+                  )}
+                  <TouchableOpacity style={styles.attachRemove} onPress={() => removeAttachment(att.id)}>
+                    <Text style={styles.attachRemoveText}>×</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+          {/* Text input area */}
           <TextInput
             style={[styles.input, { height: inputHeight }]}
             value={input}
@@ -426,33 +534,54 @@ export default function ChatScreen({ onLogout }) {
             onContentSizeChange={handleContentSizeChange}
             editable={true}
           />
-        </View>
-        {/* Action row — + on left, send/stop on right */}
-        <View style={styles.inputActions}>
-          <TouchableOpacity style={styles.attachBtn} onPress={() => Alert.alert('Coming soon', 'File & image attachments coming soon.')}>
-            <Text style={styles.attachBtnText}>+</Text>
-          </TouchableOpacity>
-          <View style={{ flex: 1 }} />
-          {isTyping ? (
-            <TouchableOpacity style={styles.stopBtn} onPress={stop}>
-              <View style={styles.stopIcon} />
+          {/* Action row — + left, send/stop right */}
+          <View style={styles.inputActions}>
+            <TouchableOpacity style={styles.attachBtn} onPress={() => setShowAttachMenu(true)}>
+              <Text style={styles.attachBtnText}>+</Text>
             </TouchableOpacity>
-          ) : (
-            <Animated.View style={{ opacity: sendOpacity }}>
-              <TouchableOpacity
-                style={styles.sendBtn}
-                onPress={handleSend}
-                disabled={!input.trim()}
-              >
-                <View style={styles.sendArrow}>
-                  <View style={styles.sendArrowLeft} />
-                  <View style={styles.sendArrowRight} />
-                </View>
+            <View style={{ flex: 1 }} />
+            {isTyping ? (
+              <TouchableOpacity style={styles.stopBtn} onPress={stop}>
+                <View style={styles.stopIcon} />
               </TouchableOpacity>
-            </Animated.View>
-          )}
+            ) : (
+              <Animated.View style={{ opacity: sendOpacity }}>
+                <TouchableOpacity
+                  style={styles.sendBtn}
+                  onPress={handleSend}
+                  disabled={!input.trim() && attachments.length === 0}
+                >
+                  <View style={styles.sendArrow}>
+                    <View style={styles.sendArrowLeft} />
+                    <View style={styles.sendArrowRight} />
+                  </View>
+                </TouchableOpacity>
+              </Animated.View>
+            )}
+          </View>
         </View>
       </View>
+
+      {/* ===== ATTACH MENU — bottom sheet ===== */}
+      <Modal visible={showAttachMenu} transparent animationType="slide" onRequestClose={() => setShowAttachMenu(false)}>
+        <TouchableOpacity style={styles.attachOverlay} activeOpacity={1} onPress={() => setShowAttachMenu(false)}>
+          <View style={styles.attachSheet}>
+            <View style={styles.attachSheetHandle} />
+            <TouchableOpacity style={styles.attachOption} onPress={handleCamera}>
+              <Text style={styles.attachOptionIcon}>📷</Text>
+              <Text style={styles.attachOptionText}>Camera</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.attachOption} onPress={handlePhotos}>
+              <Text style={styles.attachOptionIcon}>🖼️</Text>
+              <Text style={styles.attachOptionText}>Photos</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.attachOption} onPress={handleFiles}>
+              <Text style={styles.attachOptionIcon}>📁</Text>
+              <Text style={styles.attachOptionText}>Files</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* ===== SIDEBAR ===== */}
       <Sidebar
@@ -691,51 +820,98 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '-45deg' }, { translateX: 1 }],
   },
 
-  // ===== INPUT =====
+  // ===== INPUT — Claude-style single card =====
   inputContainer: {
-    paddingHorizontal: spacing.md, paddingTop: 8,
-    borderTopWidth: 0.5, borderTopColor: colors.border,
+    paddingHorizontal: spacing.sm, paddingTop: 4, paddingBottom: 0,
     backgroundColor: colors.bg,
   },
-  inputBox: {
-    backgroundColor: colors.bgSubtle, borderRadius: radius.lg,
-    paddingHorizontal: spacing.md, paddingVertical: 4,
-    marginBottom: 4,
+  inputCard: {
+    backgroundColor: colors.bgSubtle, borderRadius: radius.xl,
+    paddingHorizontal: spacing.md, paddingTop: 8, paddingBottom: 4,
   },
   inputActions: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 4, paddingBottom: 4,
+    paddingTop: 2, paddingBottom: 4,
   },
   attachBtn: {
-    width: 34, height: 34, borderRadius: radius.full,
+    width: 32, height: 32, borderRadius: radius.full,
+    backgroundColor: colors.bgMuted,
     justifyContent: 'center', alignItems: 'center',
   },
   attachBtnText: {
-    color: colors.textSecondary, fontSize: 26, fontWeight: '300', lineHeight: 30,
+    color: colors.textSecondary, fontSize: 22, fontWeight: '400', lineHeight: 26,
   },
   input: {
     fontSize: typography.md, color: colors.text,
-    paddingVertical: 8, lineHeight: typography.normal,
+    paddingVertical: 6, lineHeight: typography.normal,
     minHeight: 36,
   },
   stopBtn: {
-    width: 34, height: 34, borderRadius: radius.full,
+    width: 32, height: 32, borderRadius: radius.full,
     backgroundColor: colors.surface,
     justifyContent: 'center', alignItems: 'center',
-    marginLeft: spacing.sm, marginBottom: 4,
     borderWidth: 1.5, borderColor: colors.border,
   },
   stopIcon: {
-    width: 12, height: 12, borderRadius: 2,
+    width: 11, height: 11, borderRadius: 2,
     backgroundColor: colors.text,
   },
-  sendBtnWrap: { marginLeft: spacing.sm, marginBottom: 4 },
   sendBtn: {
-    width: 34, height: 34, borderRadius: radius.full,
+    width: 32, height: 32, borderRadius: radius.full,
     backgroundColor: colors.primary,
     justifyContent: 'center', alignItems: 'center',
   },
-  sendBtnDisabled: { opacity: 0.5 },
+  // Attachment previews inside input card
+  attachPreviewRow: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 8,
+    paddingBottom: 8,
+  },
+  attachPreview: {
+    position: 'relative',
+  },
+  attachThumb: {
+    width: 72, height: 72, borderRadius: radius.md,
+    backgroundColor: colors.bgMuted,
+  },
+  attachFileCard: {
+    width: 140, height: 56, borderRadius: radius.md,
+    backgroundColor: colors.bgMuted, flexDirection: 'row',
+    alignItems: 'center', paddingHorizontal: 10, gap: 6,
+  },
+  attachFileIcon: { fontSize: 20 },
+  attachFileName: {
+    flex: 1, fontSize: typography.xs, color: colors.textSecondary,
+  },
+  attachRemove: {
+    position: 'absolute', top: -6, right: -6,
+    width: 20, height: 20, borderRadius: 10,
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  attachRemoveText: {
+    color: colors.text, fontSize: 14, fontWeight: '600', lineHeight: 16,
+  },
+  // Bottom sheet menu
+  attachOverlay: {
+    flex: 1, justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  attachSheet: {
+    backgroundColor: colors.bgMuted, borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl, paddingBottom: 32, paddingTop: 12,
+  },
+  attachSheetHandle: {
+    width: 36, height: 4, borderRadius: 2,
+    backgroundColor: colors.border, alignSelf: 'center', marginBottom: 16,
+  },
+  attachOption: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 14, paddingHorizontal: 24, gap: 16,
+  },
+  attachOptionIcon: { fontSize: 24 },
+  attachOptionText: {
+    fontSize: typography.md, color: colors.text, fontWeight: '500',
+  },
   // Chevron-up icon drawn with two rotated bars
   sendArrow: {
     width: 14, height: 10,
