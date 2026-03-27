@@ -1,5 +1,5 @@
 import React, { memo, useRef, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity, Clipboard, ToastAndroid } from 'react-native';
+import { View, Text, StyleSheet, Animated, Pressable, Clipboard, ToastAndroid } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import PortfolioChart from './PortfolioChart';
 import { colors, spacing, radius, typography } from '../styles/theme';
@@ -40,11 +40,11 @@ function MessageBubble({ message }) {
           { opacity: fadeAnim, transform: [{ translateX: slideAnim }] },
         ]}
       >
-        <TouchableOpacity onLongPress={handleLongPress} activeOpacity={1}>
+        <Pressable onLongPress={handleLongPress} android_ripple={null}>
           <View style={styles.userBubble}>
             <Text style={styles.userText}>{message.content}</Text>
           </View>
-        </TouchableOpacity>
+        </Pressable>
       </Animated.View>
     );
   }
@@ -68,14 +68,14 @@ function MessageBubble({ message }) {
       <View style={styles.iconWrap}>
         <Text style={styles.iconText}>C</Text>
       </View>
-      <TouchableOpacity style={styles.assistantContent} onLongPress={handleLongPress} activeOpacity={1}>
+      <Pressable style={styles.assistantContent} onLongPress={handleLongPress} android_ripple={null}>
         {message.content ? (
           <Markdown style={markdownStyles}>{message.content}</Markdown>
         ) : null}
         {message.chartData ? (
           <PortfolioChart data={message.chartData} />
         ) : null}
-      </TouchableOpacity>
+      </Pressable>
     </Animated.View>
   );
 }

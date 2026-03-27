@@ -421,7 +421,7 @@ export default function ChatScreen({ onLogout }) {
             multiline
             maxLength={500}
             onContentSizeChange={handleContentSizeChange}
-            editable={!isTyping}
+            editable={true}
           />
 
           {/* Stop button while typing, send button otherwise */}
