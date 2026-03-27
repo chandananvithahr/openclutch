@@ -413,11 +413,8 @@ export default function ChatScreen({ onLogout }) {
 
       {/* ===== INPUT BAR ===== */}
       <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 4) }]}>
-        <View style={[styles.inputRow, { minHeight: Math.max(inputHeight + 8, 48) }]}>
-          {/* Attach button */}
-          <TouchableOpacity style={styles.attachBtn} onPress={() => Alert.alert('Coming soon', 'File & image attachments coming soon.')}>
-            <Text style={styles.attachBtnText}>+</Text>
-          </TouchableOpacity>
+        {/* Text input — full width */}
+        <View style={styles.inputBox}>
           <TextInput
             style={[styles.input, { height: inputHeight }]}
             value={input}
@@ -429,14 +426,19 @@ export default function ChatScreen({ onLogout }) {
             onContentSizeChange={handleContentSizeChange}
             editable={true}
           />
-
-          {/* Stop button while typing, send button otherwise */}
+        </View>
+        {/* Action row — + on left, send/stop on right */}
+        <View style={styles.inputActions}>
+          <TouchableOpacity style={styles.attachBtn} onPress={() => Alert.alert('Coming soon', 'File & image attachments coming soon.')}>
+            <Text style={styles.attachBtnText}>+</Text>
+          </TouchableOpacity>
+          <View style={{ flex: 1 }} />
           {isTyping ? (
             <TouchableOpacity style={styles.stopBtn} onPress={stop}>
               <View style={styles.stopIcon} />
             </TouchableOpacity>
           ) : (
-            <Animated.View style={[styles.sendBtnWrap, { opacity: sendOpacity }]}>
+            <Animated.View style={{ opacity: sendOpacity }}>
               <TouchableOpacity
                 style={styles.sendBtn}
                 onPress={handleSend}
@@ -691,26 +693,30 @@ const styles = StyleSheet.create({
 
   // ===== INPUT =====
   inputContainer: {
-    paddingHorizontal: spacing.md, paddingTop: 6,
+    paddingHorizontal: spacing.md, paddingTop: 8,
     borderTopWidth: 0.5, borderTopColor: colors.border,
     backgroundColor: colors.bg,
   },
-  inputRow: {
-    flexDirection: 'row', alignItems: 'flex-end',
-    backgroundColor: colors.bgSubtle, borderRadius: radius.xl,
-    paddingHorizontal: spacing.sm, paddingVertical: 4,
+  inputBox: {
+    backgroundColor: colors.bgSubtle, borderRadius: radius.lg,
+    paddingHorizontal: spacing.md, paddingVertical: 4,
+    marginBottom: 4,
+  },
+  inputActions: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 4, paddingBottom: 4,
   },
   attachBtn: {
     width: 34, height: 34, borderRadius: radius.full,
     justifyContent: 'center', alignItems: 'center',
-    marginRight: 4, marginBottom: 4,
   },
   attachBtnText: {
-    color: colors.textSecondary, fontSize: 24, fontWeight: '300', lineHeight: 28,
+    color: colors.textSecondary, fontSize: 26, fontWeight: '300', lineHeight: 30,
   },
   input: {
-    flex: 1, fontSize: typography.md, color: colors.text,
-    paddingVertical: 10, lineHeight: typography.normal,
+    fontSize: typography.md, color: colors.text,
+    paddingVertical: 8, lineHeight: typography.normal,
+    minHeight: 36,
   },
   stopBtn: {
     width: 34, height: 34, borderRadius: radius.full,
