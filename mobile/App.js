@@ -10,6 +10,7 @@ import LoginScreen    from './screens/LoginScreen';
 import OnboardingFlow from './screens/OnboardingFlow';
 import ChatScreen     from './screens/ChatScreen';
 import { getToken, clearToken } from './services/api';
+import BACKEND_URL from './services/config';
 
 const Stack = createStackNavigator();
 
@@ -80,15 +81,35 @@ const splash = StyleSheet.create({
 export default function App() {
   const [authState, setAuthState] = useState('loading');
 
+  // Check if user already completed onboarding (local flag OR backend profile exists)
+  const isOnboardingDone = useCallback(async (token) => {
+    const local = await AsyncStorage.getItem('onboarding_done');
+    if (local === 'true') return true;
+    // Local flag missing (cleared app data) — check backend
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/onboarding/profile`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.profile?.name) {
+          await AsyncStorage.setItem('onboarding_done', 'true');
+          return true;
+        }
+      }
+    } catch {}
+    return false;
+  }, []);
+
   const checkAuth = useCallback(async () => {
     const token = await getToken();
     if (!token) {
       setAuthState('unauthenticated');
       return;
     }
-    const done = await AsyncStorage.getItem('onboarding_done');
-    setAuthState(done === 'true' ? 'chat' : 'onboarding');
-  }, []);
+    const done = await isOnboardingDone(token);
+    setAuthState(done ? 'chat' : 'onboarding');
+  }, [isOnboardingDone]);
 
   useEffect(() => {
     checkAuth();
@@ -96,9 +117,10 @@ export default function App() {
 
   // Called by LoginScreen after successful signup or login
   const handleAuthSuccess = useCallback(async () => {
-    const done = await AsyncStorage.getItem('onboarding_done');
-    setAuthState(done === 'true' ? 'chat' : 'onboarding');
-  }, []);
+    const token = await getToken();
+    const done = await isOnboardingDone(token);
+    setAuthState(done ? 'chat' : 'onboarding');
+  }, [isOnboardingDone]);
 
   // Called by OnboardingFlow on completion
   const handleOnboardingDone = useCallback(() => {
