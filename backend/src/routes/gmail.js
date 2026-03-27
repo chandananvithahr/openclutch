@@ -67,7 +67,7 @@ async function loadTokensFromDB(userId) {
 
 // GET /api/gmail/login — returns JSON for app, redirects for browser
 // userId passed as query param so it can be embedded in OAuth state
-router.get('/login', (req, res) => {
+router.get('/login', async (req, res) => {
   const userId = req.userId;
   if (!userId) return res.status(400).json({ error: 'userId required' });
 
@@ -76,7 +76,7 @@ router.get('/login', (req, res) => {
     access_type: 'offline',
     scope: ['https://www.googleapis.com/auth/gmail.readonly'],
     prompt: 'consent',
-    state: generateState(userId),
+    state: await generateState(userId),
   });
   if (req.query.json === 'true' || req.headers.accept?.includes('application/json')) {
     return res.json({ loginUrl: url });

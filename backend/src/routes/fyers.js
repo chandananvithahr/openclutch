@@ -60,8 +60,8 @@ function createClient(token, req) {
 // ── Step 1: Login redirect ──────────────────────────────────────────────────
 
 // GET /api/fyers/login
-router.get('/login', (req, res) => {
-  const state = generateState(req.userId);
+router.get('/login', async (req, res) => {
+  const state = await generateState(req.userId);
   const fyers = new fyersModel();
   fyers.setAppId(process.env.FYERS_APP_ID);
   fyers.setRedirectUrl(getRedirectUri(req));

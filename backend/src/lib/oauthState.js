@@ -5,21 +5,25 @@
 // Pattern: generate state on /login, verify state on /callback, delete after use
 
 const crypto = require('crypto');
+const supabase = require('./supabase');
 const { supabaseAdmin } = require('./supabase');
 const logger = require('./logger');
 
 const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
-function generateState(userId) {
+// Use service_role client if available, fall back to anon
+const db = supabaseAdmin || supabase;
+
+async function generateState(userId) {
   const state = crypto.randomBytes(24).toString('hex');
 
-  // Fire-and-forget insert — don't block the login redirect
-  supabaseAdmin
+  const { error } = await db
     .from('oauth_states')
-    .insert({ state, user_id: userId || null })
-    .then(({ error }) => {
-      if (error) logger.error('Failed to save OAuth state', { error: error.message });
-    });
+    .insert({ state, user_id: userId || null });
+
+  if (error) {
+    logger.error('Failed to save OAuth state', { error: error.message });
+  }
 
   return state;
 }
@@ -27,8 +31,7 @@ function generateState(userId) {
 async function validateState(state) {
   if (!state) return { valid: false, userId: null };
 
-  // Fetch and delete in one step (select then delete)
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db
     .from('oauth_states')
     .select('user_id, created_at')
     .eq('state', state)
@@ -37,7 +40,7 @@ async function validateState(state) {
   if (error || !data) return { valid: false, userId: null };
 
   // Delete after reading (single-use)
-  await supabaseAdmin.from('oauth_states').delete().eq('state', state);
+  await db.from('oauth_states').delete().eq('state', state);
 
   // Check expiry
   const age = Date.now() - new Date(data.created_at).getTime();
@@ -49,7 +52,7 @@ async function validateState(state) {
 // Cleanup expired states every 15 minutes
 setInterval(async () => {
   const cutoff = new Date(Date.now() - STATE_TTL_MS).toISOString();
-  const { error } = await supabaseAdmin
+  const { error } = await db
     .from('oauth_states')
     .delete()
     .lt('created_at', cutoff);

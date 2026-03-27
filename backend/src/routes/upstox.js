@@ -64,8 +64,8 @@ function createApiClient(token) {
 // ── Step 1: Login redirect ──────────────────────────────────────────────────
 
 // GET /api/upstox/login — requires JWT auth
-router.get('/login', (req, res) => {
-  const state = generateState(req.userId);
+router.get('/login', async (req, res) => {
+  const state = await generateState(req.userId);
   const params = new URLSearchParams({
     client_id:     process.env.UPSTOX_API_KEY,
     redirect_uri:  getRedirectUri(req),

@@ -37,9 +37,9 @@ function createKite(token) {
 // Step 1: Generate Zerodha login URL
 // GET /api/zerodha/login — requires JWT auth, returns JSON loginUrl
 // Mobile app opens this URL in a browser; userId is stored in OAuth state
-router.get('/login', (req, res) => {
+router.get('/login', async (req, res) => {
   const userId = req.userId;
-  const state = generateState(userId);
+  const state = await generateState(userId);
   const kite = createKite();
   const base = kite.getLoginURL();
   const loginUrl = `${base}&state=${state}`;
