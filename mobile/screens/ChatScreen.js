@@ -407,19 +407,6 @@ export default function ChatScreen({ onLogout }) {
           scrollEventThrottle={100}
         />
 
-        {/* Scroll-to-bottom float button — myChat ChatHistory pattern */}
-        <Animated.View style={[styles.scrollBtnWrap, { opacity: scrollBtnOpacity }]}>
-          <TouchableOpacity
-            style={styles.scrollBtn}
-            onPress={scrollToBottom}
-            pointerEvents={showScrollBtn ? 'auto' : 'none'}
-          >
-            <View style={styles.chevronDown}>
-              <View style={styles.chevronLeft} />
-              <View style={styles.chevronRight} />
-            </View>
-          </TouchableOpacity>
-        </Animated.View>
       </View>
 
       {/* ===== INPUT BAR ===== */}
