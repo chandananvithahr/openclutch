@@ -114,15 +114,22 @@ router.get('/portfolio', async (req, res) => {
       kite.getPositions(),
     ]);
 
+    // Filter out sold stocks (qty 0) — match what Kite shows
+    const activeHoldings = holdings.filter(h => h.quantity > 0);
+
     let totalValue = 0;
     let totalInvested = 0;
+    let totalDayChange = 0;
 
-    const formattedHoldings = holdings.map(h => {
+    const formattedHoldings = activeHoldings.map(h => {
       const currentValue = h.last_price * h.quantity;
       const investedValue = h.average_price * h.quantity;
-      const pnl = currentValue - investedValue;
+      // Use Zerodha's own P&L if available (includes dividends, corp actions)
+      const pnl = h.pnl != null ? h.pnl : (currentValue - investedValue);
+      const dayChange = (h.last_price - h.close_price) * h.quantity;
       totalValue += currentValue;
       totalInvested += investedValue;
+      totalDayChange += dayChange;
 
       return {
         symbol: h.tradingsymbol,
@@ -130,6 +137,8 @@ router.get('/portfolio', async (req, res) => {
         qty: h.quantity,
         buy_price: h.average_price,
         current_price: h.last_price,
+        close_price: h.close_price,
+        day_change: parseFloat(dayChange.toFixed(2)),
         pnl: parseFloat(pnl.toFixed(2)),
         pnl_percent: investedValue > 0 ? parseFloat(((pnl / investedValue) * 100).toFixed(2)) : 0,
         broker: 'Zerodha',
@@ -143,6 +152,8 @@ router.get('/portfolio', async (req, res) => {
       total_invested: parseFloat(totalInvested.toFixed(2)),
       total_pnl: parseFloat(totalPnl.toFixed(2)),
       total_pnl_percent: totalInvested > 0 ? parseFloat(((totalPnl / totalInvested) * 100).toFixed(2)) : 0,
+      total_day_change: parseFloat(totalDayChange.toFixed(2)),
+      holdings_count: formattedHoldings.length,
       holdings: formattedHoldings,
       brokers_connected: ['Zerodha'],
     });
@@ -169,12 +180,13 @@ async function fetchHoldingsForUser(userId) {
   if (!token) return [];
   const kite = createKite(token);
   const raw = await kite.getHoldings();
-  return raw.map(h => ({
+  return raw.filter(h => h.quantity > 0).map(h => ({
     symbol: h.tradingsymbol,
     name: h.tradingsymbol,
     qty: h.quantity,
     buy_price: h.average_price,
     current_price: h.last_price,
+    pnl: h.pnl != null ? h.pnl : ((h.last_price - h.average_price) * h.quantity),
     broker: 'Zerodha',
   }));
 }
