@@ -7,8 +7,6 @@ import { colors, spacing, radius, typography } from '../styles/theme';
 function MessageBubble({ message }) {
   const isUser = message.role === 'user';
 
-  // Don't render empty streaming bubble — TypingIndicator covers this state
-  if (message.streaming && !message.content) return null;
 
   const handleLongPress = useCallback(() => {
     if (!message.content) return;

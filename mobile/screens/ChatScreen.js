@@ -396,7 +396,7 @@ export default function ChatScreen({ onLogout }) {
       <View style={styles.listWrapper}>
         <FlatList
           ref={flatListRef}
-          data={messages}
+          data={messages.filter(m => !(m.streaming && !m.content))}
           keyExtractor={item => item.id}
           renderItem={renderItem}
           ListFooterComponent={messages[messages.length - 1]?.streaming && !messages[messages.length - 1]?.content ? <TypingIndicator /> : null}
