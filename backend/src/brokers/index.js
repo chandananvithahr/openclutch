@@ -13,7 +13,7 @@ const logger = require('../lib/logger');
 
 // ─── Shared normalization ─────────────────────────────────────────────────────
 
-function normalizeHolding({ symbol, name, qty, currentPrice, avgPrice, broker }) {
+function normalizeHolding({ symbol, name, qty, currentPrice, avgPrice, broker, settling }) {
   const cv  = currentPrice * qty;
   const iv  = avgPrice * qty;
   const pnl = cv - iv;
@@ -26,6 +26,7 @@ function normalizeHolding({ symbol, name, qty, currentPrice, avgPrice, broker })
     pnl:           parseFloat(pnl.toFixed(2)),
     pnl_percent:   iv > 0 ? parseFloat(((pnl / iv) * 100).toFixed(2)) : 0,
     broker,
+    ...(settling && { settling: true }),
   };
 }
 
@@ -51,6 +52,7 @@ const adapters = [
         currentPrice: h.current_price,
         avgPrice:     h.buy_price,
         broker:       'Zerodha',
+        settling:     h.settling,
       }));
     },
   },
@@ -129,7 +131,8 @@ const adapters = [
 // ─── Unified portfolio ────────────────────────────────────────────────────────
 
 async function getPortfolio(userId) {
-  const allHoldings = [];
+  const activeHoldings   = [];
+  const settlingHoldings = [];
   let   totalValue  = 0;
   let   totalInvested = 0;
   const connected   = [];
@@ -140,19 +143,20 @@ async function getPortfolio(userId) {
     try {
       const holdings = await adapter.getHoldings(userId);
       for (const h of holdings) {
-        // Use buy_price * qty for invested, current_price * qty for value
-        totalValue    += h.current_price * h.qty;
-        totalInvested += h.buy_price     * h.qty;
-        allHoldings.push(h);
+        if (h.settling) {
+          settlingHoldings.push(h);
+        } else {
+          totalValue    += h.current_price * h.qty;
+          totalInvested += h.buy_price     * h.qty;
+          activeHoldings.push(h);
+        }
       }
       connected.push(adapter.name);
     } catch (err) {
       logger.error(`${adapter.name} portfolio fetch failed`, { err: err.message });
-      // Token expired → clear state so status reflects reality
       if (err.error_type === 'TokenException' || err.message?.includes('token')) {
         logger.warn(`${adapter.name} token appears expired — clearing`);
       }
-      // Continue — partial portfolio is better than no portfolio
     }
   }
 
@@ -172,7 +176,10 @@ async function getPortfolio(userId) {
     total_pnl_percent: totalInvested > 0
       ? parseFloat(((pnl / totalInvested) * 100).toFixed(2))
       : 0,
-    holdings:          allHoldings,
+    holdings_count:    activeHoldings.length,
+    holdings:          activeHoldings,
+    settling_count:    settlingHoldings.length,
+    settling:          settlingHoldings,
     brokers_connected: connected,
   };
 }
