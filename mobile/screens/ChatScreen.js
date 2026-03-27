@@ -301,11 +301,8 @@ export default function ChatScreen({ onLogout }) {
       uri: a.uri, name: a.name, isImage: a.isImage,
     }));
 
-    // Send the user message immediately with previews (no blocking upload)
-    const userText = text || `Analyze ${currentAttachments.map(a => a.name).join(', ')}`;
-    send(userText, previewAttachments);
-
-    // Upload files in background — results appear as follow-up
+    // Upload files first, collect AI analysis
+    const analysisResults = [];
     const token = await getToken();
     for (const att of currentAttachments) {
       try {
@@ -323,11 +320,18 @@ export default function ChatScreen({ onLogout }) {
           body: formData,
         });
         const data = await res.json();
+        if (data.reply) analysisResults.push(data.reply);
         if (data.error) Alert.alert('Upload failed', data.error);
       } catch (e) {
         Alert.alert('Upload error', e?.message || 'Failed to upload');
       }
     }
+
+    // Send with file analysis so AI has the content
+    const parts = [];
+    if (text) parts.push(text);
+    if (analysisResults.length > 0) parts.push(`[File analysis results]\n${analysisResults.join('\n\n')}`);
+    await send(parts.join('\n\n') || 'Analyze my attachments', previewAttachments);
   }, [input, isTyping, send, attachments]);
 
   const handleNewChat = useCallback(() => {
