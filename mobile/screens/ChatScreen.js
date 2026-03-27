@@ -439,12 +439,10 @@ export default function ChatScreen({ onLogout }) {
       handleZerodhaConnect, handleUpstoxConnect, handleFyersConnect, handleGmailConnect]);
 
   return (
-    // On Android, adjustResize handles keyboard — no KeyboardAvoidingView needed
-    // On iOS, use padding behavior
+    // KeyboardAvoidingView — padding on iOS, height on Android for slight lift
     <KeyboardAvoidingView
       style={[styles.container, { paddingTop: insets.top }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <StatusBar barStyle="light-content" backgroundColor={colors.bg} translucent={false} />
 
