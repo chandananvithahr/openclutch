@@ -439,11 +439,12 @@ export default function ChatScreen({ onLogout }) {
       handleZerodhaConnect, handleUpstoxConnect, handleFyersConnect, handleGmailConnect]);
 
   return (
-    // KeyboardAvoidingView — Gifted Chat fix for input bar sticking to keyboard
+    // On Android, adjustResize handles keyboard — no KeyboardAvoidingView needed
+    // On iOS, use padding behavior
     <KeyboardAvoidingView
       style={[styles.container, { paddingTop: insets.top }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : undefined}
     >
       <StatusBar barStyle="light-content" backgroundColor={colors.bg} translucent={false} />
 
@@ -837,7 +838,7 @@ const styles = StyleSheet.create({
 
   // ===== INPUT — Claude-style single card =====
   inputContainer: {
-    paddingHorizontal: spacing.sm, paddingTop: 4, paddingBottom: 0,
+    paddingHorizontal: spacing.sm, paddingTop: 2, paddingBottom: 0,
     backgroundColor: colors.bg,
   },
   inputCard: {
