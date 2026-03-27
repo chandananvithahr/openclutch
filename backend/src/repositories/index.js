@@ -15,6 +15,7 @@
 const supabaseLib = require('../lib/supabase');
 const supabase = supabaseLib.supabaseAdmin || supabaseLib;
 const config   = require('../lib/config');
+const logger   = require('../lib/logger');
 
 // ─── Messages ────────────────────────────────────────────────────────────────
 
@@ -159,18 +160,16 @@ const connectedApps = {
 
   // Save/update token (upsert on user_id + app_name)
   async saveToken(userId, appName, tokens) {
+    const row = {
+      user_id:       userId,
+      app_name:      appName,
+      access_token:  tokens.accessToken,
+      updated_at:    new Date().toISOString(),
+    };
     const { error } = await supabase
       .from('connected_apps')
-      .upsert(
-        {
-          user_id:       userId,
-          app_name:      appName,
-          access_token:  tokens.accessToken,
-          refresh_token: tokens.refreshToken || null,
-          updated_at:    new Date().toISOString(),
-        },
-        { onConflict: 'user_id,app_name' }
-      );
+      .upsert(row, { onConflict: 'user_id,app_name' });
+    if (error) logger.error('saveToken failed', { userId, appName, error: error.message });
     return { error };
   },
 
