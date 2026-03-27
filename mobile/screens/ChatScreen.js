@@ -343,8 +343,8 @@ export default function ChatScreen({ onLogout }) {
     // KeyboardAvoidingView — Gifted Chat fix for input bar sticking to keyboard
     <KeyboardAvoidingView
       style={[styles.container, { paddingTop: insets.top }]}
-      behavior="padding"
-      keyboardVerticalOffset={insets.top + 48}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={0}
     >
       <StatusBar barStyle="light-content" backgroundColor={colors.bg} translucent={false} />
 
@@ -412,8 +412,12 @@ export default function ChatScreen({ onLogout }) {
       </View>
 
       {/* ===== INPUT BAR ===== */}
-      <View style={[styles.inputContainer, { paddingBottom: insets.bottom || 8 }]}>
+      <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 4) }]}>
         <View style={[styles.inputRow, { minHeight: Math.max(inputHeight + 8, 48) }]}>
+          {/* Attach button */}
+          <TouchableOpacity style={styles.attachBtn} onPress={() => Alert.alert('Coming soon', 'File & image attachments coming soon.')}>
+            <Text style={styles.attachBtnText}>+</Text>
+          </TouchableOpacity>
           <TextInput
             style={[styles.input, { height: inputHeight }]}
             value={input}
@@ -694,7 +698,15 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: 'row', alignItems: 'flex-end',
     backgroundColor: colors.bgSubtle, borderRadius: radius.xl,
-    paddingHorizontal: spacing.lg, paddingVertical: 4,
+    paddingHorizontal: spacing.sm, paddingVertical: 4,
+  },
+  attachBtn: {
+    width: 34, height: 34, borderRadius: radius.full,
+    justifyContent: 'center', alignItems: 'center',
+    marginRight: 4, marginBottom: 4,
+  },
+  attachBtnText: {
+    color: colors.textSecondary, fontSize: 24, fontWeight: '300', lineHeight: 28,
   },
   input: {
     flex: 1, fontSize: typography.md, color: colors.text,
