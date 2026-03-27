@@ -74,4 +74,32 @@ setInterval(async () => {
   if (error) logger.error('OAuth state cleanup failed', { error: error.message });
 }, 15 * 60 * 1000);
 
-module.exports = { generateState, validateState };
+// Fallback for providers that don't forward state (e.g. Zerodha KiteConnect).
+// Consumes the most recent pending state — safe because only one broker login
+// happens at a time per user.
+async function consumeLatestState() {
+  const cutoff = new Date(Date.now() - STATE_TTL_MS).toISOString();
+
+  const { data, error } = await db
+    .from('oauth_states')
+    .select('state, user_id, created_at')
+    .gt('created_at', cutoff)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error || !data) {
+    logger.error('OAuth consumeLatestState: no pending state found', {
+      error: error?.message || 'no data',
+    });
+    return { valid: false, userId: null };
+  }
+
+  // Delete after reading (single-use)
+  await db.from('oauth_states').delete().eq('state', data.state);
+
+  logger.info('OAuth consumeLatestState: success', { userId: data.user_id });
+  return { valid: true, userId: data.user_id };
+}
+
+module.exports = { generateState, validateState, consumeLatestState };

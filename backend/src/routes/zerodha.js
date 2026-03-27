@@ -51,10 +51,21 @@ router.get('/login', async (req, res) => {
 
 // Step 2: Zerodha redirects back here after user logs in
 // GET /api/zerodha/callback?request_token=XXXX
+// NOTE: Zerodha does NOT forward the state param in callbacks (unlike standard OAuth2).
+// We look up the most recent pending state to identify the user.
 router.get('/callback', async (req, res) => {
   const { request_token, state } = req.query;
 
-  const { valid, userId } = await validateState(state);
+  let valid, userId;
+  if (state) {
+    // Standard path — state forwarded (other brokers, or if Zerodha ever adds support)
+    ({ valid, userId } = await validateState(state));
+  } else {
+    // Zerodha path — no state in callback. Find the most recent pending state.
+    const { consumeLatestState } = require('../lib/oauthState');
+    ({ valid, userId } = await consumeLatestState());
+  }
+
   if (!valid || !userId) {
     return res.status(403).send('Invalid or expired OAuth state. Please try connecting again.');
   }

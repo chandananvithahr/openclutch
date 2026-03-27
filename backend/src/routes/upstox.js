@@ -124,8 +124,15 @@ router.get('/callback', async (req, res) => {
       </body></html>
     `);
   } catch (err) {
-    logger.error('Upstox OAuth callback error', { err: err.message });
-    res.status(500).send(`Upstox auth failed: ${err.response?.data?.message || err.message}`);
+    const errData = err.response?.data;
+    logger.error('Upstox OAuth callback error', {
+      message: err.message,
+      status: err.response?.status,
+      errorCode: errData?.errorCode,
+      errorMsg: errData?.message,
+      redirect_uri_used: getRedirectUri(req),
+    });
+    res.status(500).send(`Upstox auth failed: ${errData?.message || err.message} (code: ${errData?.errorCode || 'unknown'})`);
   }
 });
 
