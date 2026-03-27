@@ -683,7 +683,7 @@ export default function ChatScreen({ onLogout }) {
           <View style={styles.credModalBox}>
             <Text style={styles.credModalTitle}>Connect Angel One</Text>
             <Text style={styles.credModalDesc}>
-              Credentials go directly to Angel One. Clutch never stores your password.
+              Credentials go directly to Angel One. Clutch never stores your MPIN.
             </Text>
             <TextInput
               style={styles.credInput}
@@ -695,7 +695,7 @@ export default function ChatScreen({ onLogout }) {
             />
             <TextInput
               style={styles.credInput}
-              placeholder="Password"
+              placeholder="MPIN (4-digit PIN)"
               placeholderTextColor={colors.textMuted}
               value={angelCreds.password}
               onChangeText={v => setAngelCreds(p => ({ ...p, password: v }))}

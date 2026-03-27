@@ -2,6 +2,7 @@
   "expo": {
     "name": "Clutch",
     "slug": "clutch",
+    "scheme": "clutch",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -35,7 +36,7 @@
           "android": {
             "compileSdkVersion": 36,
             "targetSdkVersion": 35,
-            "minSdkVersion": 24
+            "minSdkVersion": 26
           }
         }
       ],

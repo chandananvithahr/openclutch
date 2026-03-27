@@ -9,7 +9,7 @@ const supabase = require('./supabase');
 const { supabaseAdmin } = require('./supabase');
 const logger = require('./logger');
 
-const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const STATE_TTL_MS = 30 * 60 * 1000; // 30 minutes — users may take time on broker login pages
 
 // Use service_role client if available, fall back to anon
 const db = supabaseAdmin || supabase;
