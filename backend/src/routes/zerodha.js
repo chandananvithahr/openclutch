@@ -78,8 +78,8 @@ router.get('/callback', async (req, res) => {
       <html><body style="font-family:sans-serif;text-align:center;padding:40px">
         <h2>✅ Zerodha Connected!</h2>
         <p>Your portfolio is now linked to Clutch.</p>
-        <p>Close this tab and go back to the chat.</p>
-        <script>setTimeout(() => window.close(), 3000)</script>
+        <p>Redirecting back to app...</p>
+        <script>setTimeout(() => { window.location.href = 'clutch://connected?service=zerodha'; }, 1500)</script>
       </body></html>
     `);
   } catch (err) {

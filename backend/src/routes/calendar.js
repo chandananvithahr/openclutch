@@ -75,10 +75,10 @@ router.get('/callback', async (req, res) => {
 
     res.send(`
       <html><body style="font-family:sans-serif;text-align:center;padding:40px">
-        <h2>Calendar Connected!</h2>
+        <h2>✅ Calendar Connected!</h2>
         <p>Clutch can now see your schedule.</p>
-        <p>Close this tab and go back to the chat.</p>
-        <script>setTimeout(() => window.close(), 3000)</script>
+        <p>Redirecting back to app...</p>
+        <script>setTimeout(() => { window.location.href = 'clutch://connected?service=calendar'; }, 1500)</script>
       </body></html>
     `);
   } catch (err) {

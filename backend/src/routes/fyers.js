@@ -18,6 +18,15 @@ const { generateState, validateState } = require('../lib/oauthState');
 
 const router = express.Router();
 
+const PRODUCTION_REDIRECT = 'https://humble-blessing-production.up.railway.app/api/fyers/callback';
+function getRedirectUri(req) {
+  if (process.env.FYERS_REDIRECT_URI) return process.env.FYERS_REDIRECT_URI;
+  if (!req) return PRODUCTION_REDIRECT;
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
+  return `${protocol}://${host}/api/fyers/callback`;
+}
+
 const { BoundedMap } = require('../lib/bounded-map');
 // Per-user token cache
 const tokenCache = new BoundedMap(10_000);
@@ -40,10 +49,10 @@ function clearTokenCache(userId) {
   tokenCache.delete(`${userId}:fyers`);
 }
 
-function createClient(token) {
+function createClient(token, req) {
   const fyers = new fyersModel();
   fyers.setAppId(process.env.FYERS_APP_ID);
-  fyers.setRedirectUrl(process.env.FYERS_REDIRECT_URI);
+  fyers.setRedirectUrl(getRedirectUri(req));
   fyers.setAccessToken(token);
   return fyers;
 }
@@ -55,7 +64,7 @@ router.get('/login', (req, res) => {
   const state = generateState(req.userId);
   const fyers = new fyersModel();
   fyers.setAppId(process.env.FYERS_APP_ID);
-  fyers.setRedirectUrl(process.env.FYERS_REDIRECT_URI);
+  fyers.setRedirectUrl(getRedirectUri(req));
   fyers.setStateValue(state);
 
   const loginUrl = fyers.generateAuthCode();
@@ -83,7 +92,7 @@ router.get('/callback', async (req, res) => {
   try {
     const fyers = new fyersModel();
     fyers.setAppId(process.env.FYERS_APP_ID);
-    fyers.setRedirectUrl(process.env.FYERS_REDIRECT_URI);
+    fyers.setRedirectUrl(getRedirectUri(req));
 
     const response = await fyers.generate_access_token({
       client_id:  process.env.FYERS_APP_ID,
@@ -104,11 +113,11 @@ router.get('/callback', async (req, res) => {
     logger.info('Fyers connected successfully', { userId });
 
     res.send(`
-      <html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#2D1B14;color:#F5F0EB">
-        <h2 style="color:#FFE36D">✅ Fyers Connected!</h2>
-        <p>Your portfolio is now linked to OpenClutch.</p>
-        <p>Close this tab and go back to the chat.</p>
-        <script>setTimeout(() => window.close(), 3000)</script>
+      <html><body style="font-family:sans-serif;text-align:center;padding:40px">
+        <h2>✅ Fyers Connected!</h2>
+        <p>Your portfolio is now linked to Clutch.</p>
+        <p>Redirecting back to app...</p>
+        <script>setTimeout(() => { window.location.href = 'clutch://connected?service=fyers'; }, 1500)</script>
       </body></html>
     `);
   } catch (err) {

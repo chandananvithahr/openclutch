@@ -123,11 +123,11 @@ router.get('/callback', asyncHandler(async (req, res) => {
   logger.info('Google Drive connected', { userId });
 
   res.send(`
-    <html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#2D1B14;color:#F5F0EB">
-      <h2 style="color:#FFE36D">✅ Google Drive Connected!</h2>
+    <html><body style="font-family:sans-serif;text-align:center;padding:40px">
+      <h2>✅ Google Drive Connected!</h2>
       <p>Clutch can now read your Drive files.</p>
-      <p>Close this tab and go back to the chat.</p>
-      <script>setTimeout(() => window.close(), 3000)</script>
+      <p>Redirecting back to app...</p>
+      <script>setTimeout(() => { window.location.href = 'clutch://connected?service=drive'; }, 1500)</script>
     </body></html>
   `);
 }));

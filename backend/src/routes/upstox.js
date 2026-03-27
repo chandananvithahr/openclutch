@@ -22,6 +22,15 @@ const router = express.Router();
 const UPSTOX_AUTH_URL  = 'https://api.upstox.com/v2/login/authorization/dialog';
 const UPSTOX_TOKEN_URL = 'https://api.upstox.com/v2/login/authorization/token';
 
+const PRODUCTION_REDIRECT = 'https://humble-blessing-production.up.railway.app/api/upstox/callback';
+function getRedirectUri(req) {
+  if (process.env.UPSTOX_REDIRECT_URI) return process.env.UPSTOX_REDIRECT_URI;
+  if (!req) return PRODUCTION_REDIRECT;
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
+  return `${protocol}://${host}/api/upstox/callback`;
+}
+
 const { BoundedMap } = require('../lib/bounded-map');
 // Per-user token cache
 const tokenCache = new BoundedMap(10_000);
@@ -59,7 +68,7 @@ router.get('/login', (req, res) => {
   const state = generateState(req.userId);
   const params = new URLSearchParams({
     client_id:     process.env.UPSTOX_API_KEY,
-    redirect_uri:  process.env.UPSTOX_REDIRECT_URI,
+    redirect_uri:  getRedirectUri(req),
     response_type: 'code',
     state,
   });
@@ -90,7 +99,7 @@ router.get('/callback', async (req, res) => {
         code,
         client_id:     process.env.UPSTOX_API_KEY,
         client_secret: process.env.UPSTOX_API_SECRET,
-        redirect_uri:  process.env.UPSTOX_REDIRECT_URI,
+        redirect_uri:  getRedirectUri(req),
         grant_type:    'authorization_code',
       }).toString(),
       { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
@@ -107,11 +116,11 @@ router.get('/callback', async (req, res) => {
     logger.info('Upstox connected successfully');
 
     res.send(`
-      <html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#2D1B14;color:#F5F0EB">
-        <h2 style="color:#FFE36D">✅ Upstox Connected!</h2>
-        <p>Your portfolio is now linked to OpenClutch.</p>
-        <p>Close this tab and go back to the chat.</p>
-        <script>setTimeout(() => window.close(), 3000)</script>
+      <html><body style="font-family:sans-serif;text-align:center;padding:40px">
+        <h2>✅ Upstox Connected!</h2>
+        <p>Your portfolio is now linked to Clutch.</p>
+        <p>Redirecting back to app...</p>
+        <script>setTimeout(() => { window.location.href = 'clutch://connected?service=upstox'; }, 1500)</script>
       </body></html>
     `);
   } catch (err) {

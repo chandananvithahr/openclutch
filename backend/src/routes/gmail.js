@@ -108,8 +108,8 @@ router.get('/callback', async (req, res) => {
       <html><body style="font-family:sans-serif;text-align:center;padding:40px">
         <h2>✅ Gmail Connected!</h2>
         <p>Clutch can now read your emails.</p>
-        <p>Close this tab and go back to the chat.</p>
-        <script>setTimeout(() => window.close(), 3000)</script>
+        <p>Redirecting back to app...</p>
+        <script>setTimeout(() => { window.location.href = 'clutch://connected?service=gmail'; }, 1500)</script>
       </body></html>
     `);
   } catch (err) {

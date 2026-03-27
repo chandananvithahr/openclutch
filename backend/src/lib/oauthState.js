@@ -1,36 +1,59 @@
 'use strict';
 
-// CSRF protection for OAuth flows — short-lived in-memory state tokens
+// CSRF protection for OAuth flows — Supabase-backed state tokens
+// Survives server restarts and Railway redeploys.
 // Pattern: generate state on /login, verify state on /callback, delete after use
 
 const crypto = require('crypto');
+const { supabaseAdmin } = require('./supabase');
+const logger = require('./logger');
 
-// Map of state → { createdAt, userId }
-const pendingStates = new Map();
-
-const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes — more than enough for a login
+const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 function generateState(userId) {
   const state = crypto.randomBytes(24).toString('hex');
-  pendingStates.set(state, { createdAt: Date.now(), userId: userId || null });
+
+  // Fire-and-forget insert — don't block the login redirect
+  supabaseAdmin
+    .from('oauth_states')
+    .insert({ state, user_id: userId || null })
+    .then(({ error }) => {
+      if (error) logger.error('Failed to save OAuth state', { error: error.message });
+    });
+
   return state;
 }
 
-function validateState(state) {
+async function validateState(state) {
   if (!state) return { valid: false, userId: null };
-  const entry = pendingStates.get(state);
-  if (!entry) return { valid: false, userId: null };
-  pendingStates.delete(state); // single-use
-  if (Date.now() - entry.createdAt > STATE_TTL_MS) return { valid: false, userId: null };
-  return { valid: true, userId: entry.userId };
+
+  // Fetch and delete in one step (select then delete)
+  const { data, error } = await supabaseAdmin
+    .from('oauth_states')
+    .select('user_id, created_at')
+    .eq('state', state)
+    .single();
+
+  if (error || !data) return { valid: false, userId: null };
+
+  // Delete after reading (single-use)
+  await supabaseAdmin.from('oauth_states').delete().eq('state', state);
+
+  // Check expiry
+  const age = Date.now() - new Date(data.created_at).getTime();
+  if (age > STATE_TTL_MS) return { valid: false, userId: null };
+
+  return { valid: true, userId: data.user_id };
 }
 
-// Prune expired states every 15 minutes
-setInterval(() => {
-  const cutoff = Date.now() - STATE_TTL_MS;
-  for (const [key, val] of pendingStates) {
-    if (val.createdAt < cutoff) pendingStates.delete(key);
-  }
+// Cleanup expired states every 15 minutes
+setInterval(async () => {
+  const cutoff = new Date(Date.now() - STATE_TTL_MS).toISOString();
+  const { error } = await supabaseAdmin
+    .from('oauth_states')
+    .delete()
+    .lt('created_at', cutoff);
+  if (error) logger.error('OAuth state cleanup failed', { error: error.message });
 }, 15 * 60 * 1000);
 
 module.exports = { generateState, validateState };
