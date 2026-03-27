@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, Image,
   FlatList, StyleSheet, StatusBar, Modal, Alert,
-  Animated, Dimensions, KeyboardAvoidingView, Platform,
+  Animated, Dimensions, KeyboardAvoidingView, Platform, Keyboard,
 } from 'react-native';
 import { colors, spacing, radius, typography } from '../styles/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -290,6 +290,7 @@ export default function ChatScreen({ onLogout }) {
     setInput('');
     setInputHeight(MIN_INPUT_HEIGHT);
     setAttachments([]);
+    Keyboard.dismiss();
 
     if (!hasAttachments) {
       await send(text);
