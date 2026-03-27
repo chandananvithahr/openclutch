@@ -243,10 +243,12 @@ export default function ChatScreen({ onLogout }) {
         const { Linking } = require('react-native');
         await Linking.openURL(data.loginUrl);
       } else {
-        Alert.alert(broker, `Open on laptop:\n${BACKEND_URL}${endpoint}`);
+        console.warn(`${broker} login no URL:`, res.status, JSON.stringify(data));
+        Alert.alert(broker, `Error ${res.status}: ${data.error || 'No login URL returned'}`);
       }
-    } catch {
-      Alert.alert(broker, `Could not connect. Check backend is running.`);
+    } catch (e) {
+      console.warn(`${broker} connect failed:`, e?.message);
+      Alert.alert(broker, `Could not connect: ${e?.message}`);
     }
   }, []);
 
