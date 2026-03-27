@@ -114,8 +114,16 @@ router.get('/portfolio', async (req, res) => {
       kite.getPositions(),
     ]);
 
-    // Filter out sold stocks (qty 0) — match what Kite shows
+    logger.info('Zerodha raw holdings', {
+      userId,
+      total: holdings.length,
+      symbols: holdings.map(h => `${h.tradingsymbol}:${h.quantity}`).join(', '),
+    });
+
+    // Active holdings (qty > 0) — what Kite shows as "current"
     const activeHoldings = holdings.filter(h => h.quantity > 0);
+    // Settling/zero-qty holdings — recently bought, may still be in T+1 settlement
+    const settlingHoldings = holdings.filter(h => h.quantity === 0);
 
     let totalValue = 0;
     let totalInvested = 0;
@@ -175,15 +183,23 @@ router.get('/portfolio', async (req, res) => {
       positions_pnl: parseFloat(positionsPnl.toFixed(2)),
       holdings_count: formattedHoldings.length,
       positions_count: formattedPositions.length,
+      raw_api_count: holdings.length,
+      settling_count: settlingHoldings.length,
+      settling: settlingHoldings.map(h => h.tradingsymbol),
       holdings: formattedHoldings,
       positions: formattedPositions,
       brokers_connected: ['Zerodha'],
     });
   } catch (err) {
-    logger.error('Portfolio fetch error:', err.message);
-    // Token expired — clear so status returns false and user is prompted to reconnect
-    if (err.error_type === 'TokenException' || err.message?.includes('token')) {
+    logger.error('Portfolio fetch error', { userId, message: err.message, type: err.error_type });
+    // Token expired — Zerodha tokens expire daily. Clear cache + DB so user is prompted to reconnect.
+    const isTokenError = err.error_type === 'TokenException'
+      || err.message?.includes('token')
+      || err.message?.includes('session')
+      || err.status === 403;
+    if (isTokenError) {
       clearTokenCache(userId);
+      await repos.connectedApps.deleteToken(userId, 'zerodha');
       return res.status(401).json({ error: 'Zerodha session expired. Please reconnect.', reconnect: true });
     }
     res.status(500).json({ error: err.message });

@@ -255,8 +255,11 @@ export default function OnboardingFlow({ onDone, navigation }) {
       const userId = await AsyncStorage.getItem('userId') || `user_${Date.now()}`;
       await AsyncStorage.setItem('userId', userId);
 
+      // Fire and forget — don't block navigation on API call
       const token = await getToken();
-      await fetch(`${BACKEND_URL}/api/onboarding/profile`, {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      fetch(`${BACKEND_URL}/api/onboarding/profile`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -269,7 +272,8 @@ export default function OnboardingFlow({ onDone, navigation }) {
           domain_priorities: domainPriorities,
           tone: 'pro',
         }),
-      });
+        signal: controller.signal,
+      }).catch(() => {}).finally(() => clearTimeout(timeout));
 
       await AsyncStorage.setItem('onboarding_done', 'true');
       onDone ? onDone() : navigation?.replace('Chat');

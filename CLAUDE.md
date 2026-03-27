@@ -255,7 +255,7 @@ User types message
 ## Broker Integration Plan (4 OAuth-Scalable Brokers)
 | # | Broker | API | Auth | Cost | Status |
 |---|--------|-----|------|------|--------|
-| 1 | **Zerodha** | KiteConnect | OAuth2 + request_token | Rs 2000/mo | ✅ Built + Tested |
+| 1 | **Zerodha** | KiteConnect | OAuth2 + request_token | ₹2000/mo | ✅ Built + Tested |
 | 2 | **Angel One** | SmartAPI | Client ID + MPIN + TOTP | Free | ✅ Built + Tested |
 | 3 | **Upstox** | Upstox API v2 | OAuth2 | Free | ✅ Built (account deactivated) |
 | 4 | **Fyers** | Fyers API v3 | OAuth2 | Free | ✅ Built + Tested |
